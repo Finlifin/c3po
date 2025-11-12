@@ -10,6 +10,7 @@ import fin.c3po.user.UserAccountRepository;
 import fin.c3po.user.UserRole;
 import fin.c3po.user.UserStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -18,6 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -40,28 +42,42 @@ public class AuthService {
                 normalizedUsername,
                 normalizedEmail,
                 passwordEncoder.encode(request.getPassword()),
-                request.getRole() != null ? request.getRole() : UserRole.STUDENT
-        );
+                request.getRole() != null ? request.getRole() : UserRole.STUDENT);
         userAccountRepository.save(userAccount);
         return buildAuthResponse(userAccount);
     }
 
     public AuthResponse login(LoginRequest request) {
         String identifier = request.getIdentifier().trim();
+        log.debug("Login attempt for identifier: {}", identifier);
+
+        // First check if user exists and is active
         UserAccount user = userAccountRepository.findByUsernameIgnoreCase(identifier)
                 .or(() -> userAccountRepository.findByEmailIgnoreCase(identifier))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+                .orElseThrow(() -> {
+                    log.warn("User not found: {}", identifier);
+                    return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+                });
+
+        log.debug("Found user: {}, status: {}", user.getUsername(), user.getStatus());
 
         if (user.getStatus() != UserStatus.ACTIVE) {
+            log.warn("Inactive user login attempt: {}", user.getUsername());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account is not active");
         }
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(user.getUsername(), request.getPassword())
-        );
-
-        UserAccount authenticatedUser = (UserAccount) authentication.getPrincipal();
-        return buildAuthResponse(authenticatedUser);
+        // Then authenticate (this will call UserDetailsService internally)
+        try {
+            log.debug("Authenticating user: {}", user.getUsername());
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(user.getUsername(), request.getPassword()));
+            UserAccount authenticatedUser = (UserAccount) authentication.getPrincipal();
+            log.info("User logged in successfully: {}", authenticatedUser.getUsername());
+            return buildAuthResponse(authenticatedUser);
+        } catch (Exception e) {
+            log.error("Authentication failed for user: {}", user.getUsername(), e);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+        }
     }
 
     public ProfileResponse toProfile(UserAccount userAccount) {
@@ -85,5 +101,3 @@ public class AuthService {
                 .build();
     }
 }
-
-

@@ -28,11 +28,11 @@ public class DefaultAdminInitializer {
                                 UserAccount admin = new UserAccount(
                                         "admin",
                                         "admin@c3po.local",
-                                        passwordEncoder.encode("Admin123!"),
+                                        passwordEncoder.encode("admin123"),
                                         UserRole.ADMIN
                                 );
                                 userAccountRepository.save(admin);
-                                log.info("Default admin user created with username=admin password=Admin123!");
+                                log.info("Default admin user created with username=admin password=admin123");
                             }
                     );
         };

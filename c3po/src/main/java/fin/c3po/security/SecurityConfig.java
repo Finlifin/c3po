@@ -1,13 +1,12 @@
 package fin.c3po.security;
 
 import fin.c3po.security.jwt.JwtAuthenticationFilter;
+import fin.c3po.security.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -23,8 +22,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(jwtService, userDetailsService);
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -35,15 +39,22 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/actuator/health",
-                                "/error"
-                        ).permitAll()
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                                "/error")
+                        .permitAll()
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((request, response, ex1) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED))
-                        .accessDeniedHandler((request, response, ex12) -> response.sendError(HttpServletResponse.SC_FORBIDDEN))
-                );
+                        .authenticationEntryPoint((request, response, ex1) -> {
+                            response.setContentType("application/json");
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.getWriter()
+                                    .write("{\"error\":\"Unauthorized\",\"message\":\"Authentication required\"}");
+                        })
+                        .accessDeniedHandler((request, response, ex12) -> {
+                            response.setContentType("application/json");
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.getWriter().write("{\"error\":\"Forbidden\",\"message\":\"Access denied\"}");
+                        }));
 
         return http.build();
     }
@@ -58,5 +69,3 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 }
-
-
