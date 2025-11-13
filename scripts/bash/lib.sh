@@ -44,14 +44,14 @@ _curl_common_args() {
   if [[ -n "$token" ]]; then
     args+=("-H" "Authorization: Bearer $token")
   fi
-  printf '%s\n' "${args[@]}"
+  printf '%s\0' "${args[@]}"
 }
 
 http_get() {
   local path="$1"
   local url
   url="$(_build_url "$path")"
-  mapfile -t args < <(_curl_common_args)
+  mapfile -d '' -t args < <(_curl_common_args)
   curl "${args[@]}" "$url"
 }
 
@@ -60,7 +60,7 @@ http_post() {
   local data="$2"
   local url
   url="$(_build_url "$path")"
-  mapfile -t args < <(_curl_common_args)
+  mapfile -d '' -t args < <(_curl_common_args)
   curl "${args[@]}" -X POST --data-raw "$data" "$url"
 }
 
@@ -69,7 +69,7 @@ http_put() {
   local data="$2"
   local url
   url="$(_build_url "$path")"
-  mapfile -t args < <(_curl_common_args)
+  mapfile -d '' -t args < <(_curl_common_args)
   curl "${args[@]}" -X PUT --data-raw "$data" "$url"
 }
 
@@ -77,7 +77,7 @@ http_delete() {
   local path="$1"
   local url
   url="$(_build_url "$path")"
-  mapfile -t args < <(_curl_common_args)
+  mapfile -d '' -t args < <(_curl_common_args)
   curl "${args[@]}" -X DELETE "$url"
 }
 
