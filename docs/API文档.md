@@ -4,13 +4,11 @@
 - **版本**：v0.9.2（新增成绩与学习分析能力）
 - **覆盖范围**：学生端、教师端、管理员端的核心功能接口；统一认证、消息通知、异步任务与运维相关接口。
 - **目标读者**：后端/前端开发、QA、运维、产品经理、集成方。
-- **接口前缀（当前实现）**：`/api/v1`（认证模块为 `/api/v1/auth/**`）
-- 说明：原规划中的 `/api/v1` 版本前缀将于稳定版切换，现阶段以已实现路径为准。
+- **接口前缀（当前实现）**：`/api/v1`
 
 ## 2. 接口通用约定
 
 ### 2.1 HTTP 与数据格式
-- 所有接口使用 HTTPS，默认域名为 `https://{env}.smart-learning.edu`.
 - 请求与响应主体均采用 `application/json; charset=utf-8`；文件上传使用 `multipart/form-data`。
 - 时间字段统一使用 ISO8601，带时区：`YYYY-MM-DDThh:mm:ssZ`。
 
@@ -1271,7 +1269,7 @@
 - 组件位置：`oss/`（Flask 应用，默认端口 `5000`，上传目录 `./uploads`）。
 - 服务职责：为前端/后台提供轻量级的图片直传与访问能力，采用文件内容 SHA-256 生成文件名，实现秒传与去重。
 - **上传接口**
-  - `POST https://oss.smart-learning.edu/api/v1/images/upload`
+  - `POST $BASE_URL/api/v1/images/upload`
   - 请求：`multipart/form-data`，表单字段 `file`。
   - 响应：
     ```json
@@ -1280,7 +1278,7 @@
       "url": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.png"
     }
     ```
-    - `url` 为文件名（含扩展名）；前端可拼接成 `https://oss.smart-learning.edu/api/v1/images/{url}` 访问。
+    - `url` 为文件名（含扩展名）；前端可拼接成 `$BASE_URL/api/v1/images/{url}` 访问。
     - 若文件已存在，会复用原文件名，保证幂等。
   - 失败示例（缺少文件）：
     ```json
@@ -1291,7 +1289,7 @@
     ```
     - HTTP 400；如文件名为空返回 `No selected file`。
 - **下载接口**
-  - `GET https://oss.smart-learning.edu/api/v1/images/{filename}`
+  - `GET $BASE_URL/api/v1/images/{filename}`
   - 成功：直接返回图片二进制内容（Content-Type 按扩展名推断）。
   - 失败：`404`
     ```json
