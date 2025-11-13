@@ -20,6 +20,7 @@ import fin.c3po.course.dto.UpdateCourseRequest;
 import fin.c3po.selection.CourseSelection;
 import fin.c3po.selection.CourseSelectionRepository;
 import fin.c3po.selection.SelectionStatus;
+import fin.c3po.assignment.Assignment;
 import fin.c3po.assignment.AssignmentRepository;
 import fin.c3po.course.CourseModuleRepository;
 import fin.c3po.submission.Submission;
@@ -51,10 +52,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.DoubleSummaryStatistics;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -221,34 +226,33 @@ public class CourseController {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
 
+        if (course.getStatus() != CourseStatus.PUBLISHED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Course is not open for enrollment");
+        }
+
         UUID studentId = currentUser.getId();
         CourseSelection selection = courseSelectionRepository.findByCourseIdAndStudentId(courseId, studentId)
-                .map(existing -> {
-                    if (existing.getStatus() == SelectionStatus.ENROLLED) {
-                        throw new ResponseStatusException(HttpStatus.CONFLICT, "Already enrolled");
-                    }
-                    existing.setStatus(SelectionStatus.ENROLLED);
-                    existing.setSelectedAt(Instant.now());
-                    return existing;
-                })
                 .orElseGet(() -> {
                     CourseSelection s = new CourseSelection();
                     s.setCourseId(courseId);
                     s.setStudentId(studentId);
-                    s.setStatus(SelectionStatus.ENROLLED);
-                    s.setSelectedAt(Instant.now());
                     return s;
                 });
 
+        if (selection.getId() != null && selection.getStatus() == SelectionStatus.ENROLLED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Already enrolled");
+        }
+
         if (course.getEnrollLimit() != null) {
             long enrolledCount = courseSelectionRepository.countByCourseIdAndStatus(courseId, SelectionStatus.ENROLLED);
-            if (selection.getId() == null) {
-                enrolledCount += 1;
-            }
-            if (enrolledCount > course.getEnrollLimit()) {
+            boolean incrementsCapacity = selection.getId() == null || selection.getStatus() != SelectionStatus.ENROLLED;
+            if (incrementsCapacity && enrolledCount >= course.getEnrollLimit()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Course capacity reached");
             }
         }
+
+        selection.setStatus(SelectionStatus.ENROLLED);
+        selection.setSelectedAt(Instant.now());
 
         CourseSelection saved = courseSelectionRepository.save(selection);
         CourseEnrollmentResponse response = CourseEnrollmentResponse.builder()
@@ -269,6 +273,10 @@ public class CourseController {
 
         CourseSelection selection = courseSelectionRepository.findByCourseIdAndStudentId(courseId, currentUser.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Enrollment not found"));
+
+        if (selection.getStatus() != SelectionStatus.ENROLLED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Enrollment is not active");
+        }
 
         selection.setStatus(SelectionStatus.DROPPED);
         selection.setSelectedAt(Instant.now());
@@ -296,7 +304,7 @@ public class CourseController {
         for (CourseSelection selection : selections) {
             courseRepository.findById(selection.getCourseId()).ifPresent(course -> {
                 List<Submission> submissions = selectionSubmissions(course.getId(), studentId);
-                List<fin.c3po.assignment.Assignment> assignments = assignmentRepository.findByCourseId(course.getId());
+                List<Assignment> assignments = assignmentRepository.findByCourseId(course.getId());
                 int totalAssignments = assignments.size();
                 int completedAssignments = (int) assignments.stream()
                         .filter(assignment -> submissions.stream()
@@ -329,21 +337,196 @@ public class CourseController {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
 
-        long selectionCount = courseSelectionRepository.countByCourseIdAndStatus(courseId, SelectionStatus.ENROLLED);
-        long gradedSubmissions = assignmentRepository.findByCourseId(courseId).stream()
-                .flatMap(assignment -> submissionRepository.findByAssignmentId(assignment.getId()).stream())
-                .filter(submission -> submission.getStatus() == SubmissionStatus.GRADED)
-                .count();
+        List<CourseSelection> enrolledSelections = courseSelectionRepository.findByCourseIdAndStatus(courseId, SelectionStatus.ENROLLED);
+        List<UUID> enrolledStudents = enrolledSelections.stream()
+                .map(CourseSelection::getStudentId)
+                .toList();
 
-        double completionRate = selectionCount == 0 ? 0.0 : Math.min(1.0, gradedSubmissions / (double) selectionCount);
+        List<Assignment> assignments = assignmentRepository.findByCourseId(courseId);
+        int totalAssignments = assignments.size();
+        int enrolledCount = enrolledStudents.size();
+
+        if (enrolledStudents.isEmpty() || assignments.isEmpty()) {
+            CourseAnalyticsResponse response = CourseAnalyticsResponse.builder()
+                    .completionRate(0.0)
+                    .averageScore(null)
+                    .medianScore(null)
+                    .enrolledStudents(enrolledCount)
+                    .totalAssignments(totalAssignments)
+                    .gradedSubmissions(0)
+                    .pendingSubmissions(0)
+                    .overdueStudents(List.of())
+                    .difficultAssignments(List.of())
+                    .atRiskStudents(List.of())
+                    .insights(assignments.isEmpty()
+                            ? List.of("当前课程尚未创建任何作业，暂无可计算的学习分析指标。")
+                            : List.of("暂无选课学生，暂不生成学习分析结果。"))
+                    .build();
+            return ApiResponse.success(response);
+        }
+
+        Instant now = Instant.now();
+        int gradedSubmissions = 0;
+        int pendingSubmissions = 0;
+        List<Double> allScores = new ArrayList<>();
+        List<String> difficultAssignments = new ArrayList<>();
+        List<String> insights = new ArrayList<>();
+        Set<UUID> overdueStudents = new LinkedHashSet<>();
+        Map<UUID, DoubleSummaryStatistics> scoreStatsByStudent = new HashMap<>();
+        Map<UUID, Integer> missingAssignmentsByStudent = new HashMap<>();
+
+        for (Assignment assignment : assignments) {
+            List<Submission> assignmentSubmissions = submissionRepository.findByAssignmentId(assignment.getId());
+            Map<UUID, Submission> latestByStudent = new HashMap<>();
+            for (Submission submission : assignmentSubmissions) {
+                Submission current = latestByStudent.get(submission.getStudentId());
+                if (current == null || isLater(submission, current)) {
+                    latestByStudent.put(submission.getStudentId(), submission);
+                }
+            }
+
+            double assignmentScoreTotal = 0;
+            int assignmentScoreCount = 0;
+
+            for (UUID studentId : enrolledStudents) {
+                Submission submission = latestByStudent.get(studentId);
+                DoubleSummaryStatistics studentStats = scoreStatsByStudent
+                        .computeIfAbsent(studentId, key -> new DoubleSummaryStatistics());
+
+                if (submission != null) {
+                    if (submission.getStatus() == SubmissionStatus.GRADED) {
+                        gradedSubmissions++;
+                    } else {
+                        pendingSubmissions++;
+                    }
+                    Integer score = submission.getScore();
+                    if (score != null) {
+                        studentStats.accept(score);
+                        assignmentScoreTotal += score;
+                        assignmentScoreCount++;
+                        allScores.add(score.doubleValue());
+                    }
+
+                    Instant deadline = assignment.getDeadline();
+                    if (deadline != null) {
+                        Instant submittedAt = submission.getSubmittedAt();
+                        if (submittedAt == null || submittedAt.isAfter(deadline)) {
+                            overdueStudents.add(studentId);
+                        }
+                    }
+                } else {
+                    missingAssignmentsByStudent.merge(studentId, 1, Integer::sum);
+                    Instant deadline = assignment.getDeadline();
+                    if (deadline != null && deadline.isBefore(now)) {
+                        overdueStudents.add(studentId);
+                        pendingSubmissions++;
+                    }
+                }
+            }
+
+            if (assignmentScoreCount > 0) {
+                double average = assignmentScoreTotal / assignmentScoreCount;
+                if (average < 60) {
+                    difficultAssignments.add(assignment.getTitle() != null
+                            ? assignment.getTitle()
+                            : "Assignment-" + assignment.getId());
+                }
+            } else if (assignment.getDeadline() != null && assignment.getDeadline().isBefore(now)) {
+                difficultAssignments.add(assignment.getTitle() != null
+                        ? assignment.getTitle()
+                        : "Assignment-" + assignment.getId());
+            }
+        }
+
+        Set<UUID> atRiskStudents = new LinkedHashSet<>();
+        for (UUID studentId : enrolledStudents) {
+            DoubleSummaryStatistics stats = scoreStatsByStudent.get(studentId);
+            double average = stats != null && stats.getCount() > 0 ? stats.getAverage() : 0;
+            int missing = missingAssignmentsByStudent.getOrDefault(studentId, 0);
+            if (average < 60 || missing > Math.max(1, totalAssignments / 3)) {
+                atRiskStudents.add(studentId);
+            }
+        }
+
+        double completionRate = enrolledCount == 0 || totalAssignments == 0
+                ? 0.0
+                : round(gradedSubmissions / (double) (enrolledCount * totalAssignments));
+
+        if (!allScores.isEmpty()) {
+            double avg = allScores.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+            if (avg >= 90) {
+                insights.add("整体得分表现优异，建议进一步挖掘拔尖内容。");
+            } else if (avg < 65) {
+                insights.add("整体得分偏低，可适当安排跟进辅导。");
+            }
+        }
+
+        if (!overdueStudents.isEmpty()) {
+            insights.add("存在 " + overdueStudents.size() + " 名学生存在逾期或延迟提交，建议发送提醒。");
+        }
+        if (!difficultAssignments.isEmpty()) {
+            insights.add("建议复盘以下难度较高的作业：" + String.join("、", difficultAssignments));
+        }
+        if (!atRiskStudents.isEmpty()) {
+            insights.add("共 " + atRiskStudents.size() + " 名学生处于学业风险区间。");
+        }
 
         CourseAnalyticsResponse response = CourseAnalyticsResponse.builder()
                 .completionRate(completionRate)
-                .overdueStudents(List.of())
-                .difficultAssignments(List.of())
-                .atRiskStudents(List.of())
+                .averageScore(allScores.isEmpty() ? null : round(allScores.stream().mapToDouble(Double::doubleValue).average().orElse(0)))
+                .medianScore(allScores.isEmpty() ? null : computeMedian(allScores))
+                .enrolledStudents(enrolledCount)
+                .totalAssignments(totalAssignments)
+                .gradedSubmissions(gradedSubmissions)
+                .pendingSubmissions(pendingSubmissions)
+                .overdueStudents(overdueStudents.stream().map(UUID::toString).toList())
+                .difficultAssignments(difficultAssignments)
+                .atRiskStudents(atRiskStudents.stream().map(UUID::toString).toList())
+                .insights(insights)
                 .build();
         return ApiResponse.success(response);
+    }
+
+    private boolean isLater(Submission candidate, Submission current) {
+        Instant candidateTs = resolveSubmissionTimestamp(candidate);
+        Instant currentTs = resolveSubmissionTimestamp(current);
+        if (candidateTs == null) {
+            return false;
+        }
+        if (currentTs == null) {
+            return true;
+        }
+        return candidateTs.isAfter(currentTs);
+    }
+
+    private Instant resolveSubmissionTimestamp(Submission submission) {
+        if (submission.getSubmittedAt() != null) {
+            return submission.getSubmittedAt();
+        }
+        if (submission.getUpdatedAt() != null) {
+            return submission.getUpdatedAt();
+        }
+        return submission.getCreatedAt();
+    }
+
+    private Double computeMedian(List<Double> values) {
+        if (values.isEmpty()) {
+            return null;
+        }
+        List<Double> sorted = values.stream()
+                .sorted()
+                .toList();
+        int size = sorted.size();
+        if (size % 2 == 1) {
+            return round(sorted.get(size / 2));
+        }
+        double left = sorted.get(size / 2 - 1);
+        double right = sorted.get(size / 2);
+        return round((left + right) / 2.0);
+    }
+
+    private double round(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     private Pageable buildPageable(int page, int pageSize, String sort) {
@@ -392,8 +575,7 @@ public class CourseController {
     private List<Submission> selectionSubmissions(UUID courseId, UUID studentId) {
         return assignmentRepository.findByCourseId(courseId).stream()
                 .map(assignment -> submissionRepository.findTopByAssignmentIdAndStudentIdOrderBySubmittedAtDesc(assignment.getId(), studentId))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
+                .flatMap(Optional::stream)
                 .toList();
     }
 

@@ -52,6 +52,8 @@ public class Submission extends BaseEntity {
     private Instant appealedAt;
 
     private UUID gradingTeacherId;
+
+    private Integer resubmitCount = 0;
 }
 
 

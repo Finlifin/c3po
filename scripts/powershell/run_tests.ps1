@@ -82,6 +82,12 @@ function Invoke-Main {
 
         . (Join-Path $Script:ScriptDir "test_activities.ps1")
         run_activities_tests
+
+        . (Join-Path $Script:ScriptDir "test_admin_users.ps1")
+        run_admin_users_tests
+
+        . (Join-Path $Script:ScriptDir "test_course_content.ps1")
+        run_course_content_tests
     }
     else {
         log_error "Authentication failed, skipping other tests"

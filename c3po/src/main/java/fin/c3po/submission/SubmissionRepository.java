@@ -10,6 +10,7 @@ public interface SubmissionRepository extends JpaRepository<Submission, UUID> {
     List<Submission> findByAssignmentId(UUID assignmentId);
     List<Submission> findByStudentId(UUID studentId);
     Optional<Submission> findTopByAssignmentIdAndStudentIdOrderBySubmittedAtDesc(UUID assignmentId, UUID studentId);
+    boolean existsByAssignmentIdAndStudentId(UUID assignmentId, UUID studentId);
 }
 
 

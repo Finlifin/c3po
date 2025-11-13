@@ -62,6 +62,14 @@ main() {
     # shellcheck source=/dev/null
     source "$SCRIPT_DIR/test_activities.sh"
     run_activities_tests
+
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/test_admin_users.sh"
+    run_admin_users_tests
+
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/test_course_content.sh"
+    run_course_content_tests
   else
     log_error "Authentication failed, skipping other tests"
   fi

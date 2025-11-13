@@ -49,6 +49,9 @@ public class UserAccount implements UserDetails {
     @Column(nullable = false, length = 32)
     private UserStatus status = UserStatus.ACTIVE;
 
+    @Column(length = 512)
+    private String statusReason;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

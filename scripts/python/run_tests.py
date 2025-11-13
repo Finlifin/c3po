@@ -12,6 +12,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from importlib import import_module
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -458,6 +459,12 @@ def main() -> int:
         run_dashboard_tests()
         run_members_tests()
         run_activities_tests()
+
+        admin_users_module = import_module("test_admin_users")
+        admin_users_module.run_admin_user_tests()
+
+        course_content_module = import_module("test_course_content")
+        course_content_module.run_course_content_tests()
     else:
         log_error("Authentication failed, skipping other tests")
 

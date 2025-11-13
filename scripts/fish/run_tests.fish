@@ -69,6 +69,12 @@ function main
         
         source $SCRIPT_DIR/test_activities.fish
         run_activities_tests
+
+        source $SCRIPT_DIR/test_admin_users.fish
+        run_admin_users_tests
+
+        source $SCRIPT_DIR/test_course_content.fish
+        run_course_content_tests
     else
         log_error "Authentication failed, skipping other tests"
     end

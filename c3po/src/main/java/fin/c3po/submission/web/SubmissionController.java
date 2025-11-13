@@ -70,6 +70,36 @@ public class SubmissionController {
         return ApiResponse.success(responses);
     }
 
+    @PreAuthorize("hasAnyRole('STUDENT','TEACHER','ADMIN')")
+    @GetMapping("/students/{studentId}/submissions")
+    public ApiResponse<List<SubmissionResponse>> studentSubmissions(
+            @PathVariable UUID studentId,
+            @AuthenticationPrincipal UserAccount currentUser) {
+
+        if (currentUser == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated");
+        }
+
+        List<Submission> submissions = submissionRepository.findByStudentId(studentId);
+
+        if (currentUser.getRole() == UserRole.STUDENT) {
+            if (!currentUser.getId().equals(studentId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to view other students' submissions");
+            }
+        } else if (currentUser.getRole() == UserRole.TEACHER) {
+            submissions = submissions.stream()
+                    .filter(submission -> teacherCanAccessSubmission(currentUser, submission))
+                    .toList();
+        } else if (currentUser.getRole() != UserRole.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to view student submissions");
+        }
+
+        List<SubmissionResponse> responses = submissions.stream()
+                .map(this::toResponse)
+                .toList();
+        return ApiResponse.success(responses);
+    }
+
     @PreAuthorize("hasRole('STUDENT')")
     @PostMapping("/assignments/{assignmentId}/submissions")
     public ResponseEntity<ApiResponse<SubmissionResponse>> createSubmission(
@@ -80,13 +110,21 @@ public class SubmissionController {
         Assignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
 
+        Instant now = Instant.now();
+        ensureAssignmentOpenForSubmission(assignment, now);
+
+        if (submissionRepository.existsByAssignmentIdAndStudentId(assignmentId, currentUser.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Submission already exists, please update instead");
+        }
+
         Submission submission = new Submission();
         submission.setAssignmentId(assignmentId);
         submission.setStudentId(currentUser.getId());
         submission.setStatus(SubmissionStatus.SUBMITTED);
         submission.setScore(null);
-        submission.setSubmittedAt(Instant.now());
+        submission.setSubmittedAt(now);
         submission.setAttachments(new ArrayList<>(request.getAttachments()));
+        submission.setResubmitCount(0);
 
         Submission saved = submissionRepository.save(submission);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(toResponse(saved)));
@@ -104,9 +142,33 @@ public class SubmissionController {
         if (!submission.getStudentId().equals(currentUser.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to update this submission");
         }
+
+        Assignment assignment = assignmentRepository.findById(submission.getAssignmentId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
+
+        Instant now = Instant.now();
+        ensureAssignmentOpenForSubmission(assignment, now);
+
+        if (!Boolean.TRUE.equals(assignment.getAllowResubmit())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Assignment does not allow resubmission");
+        }
+
+        int resubmitCount = submission.getResubmitCount() == null ? 0 : submission.getResubmitCount();
+        Integer maxResubmit = assignment.getMaxResubmit();
+        if (maxResubmit != null && resubmitCount >= maxResubmit) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Resubmission limit reached");
+        }
+
         submission.setAttachments(new ArrayList<>(request.getAttachments()));
         submission.setStatus(SubmissionStatus.RESUBMITTED);
-        submission.setSubmittedAt(Instant.now());
+        submission.setSubmittedAt(now);
+        submission.setResubmitCount(resubmitCount + 1);
+        submission.setScore(null);
+        submission.setFeedback(null);
+        submission.setRubricScores(null);
+        submission.setGradingTeacherId(null);
+        submission.setAppealReason(null);
+        submission.setAppealedAt(null);
         Submission saved = submissionRepository.save(submission);
         return ApiResponse.success(toResponse(saved));
     }
@@ -153,6 +215,8 @@ public class SubmissionController {
         if (request.isPublish()) {
             submission.setStatus(SubmissionStatus.GRADED);
         }
+        submission.setAppealReason(null);
+        submission.setAppealedAt(null);
         Submission saved = submissionRepository.save(submission);
         return ApiResponse.success(toResponse(saved));
     }
@@ -169,12 +233,32 @@ public class SubmissionController {
         if (!submission.getStudentId().equals(currentUser.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to appeal this submission");
         }
+        if (submission.getScore() == null || submission.getStatus() != SubmissionStatus.GRADED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Submission has not been graded or published");
+        }
+        if (submission.getAppealReason() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Submission already appealed");
+        }
         submission.setStatus(SubmissionStatus.APPEALED);
         submission.setAppealReason(request.getReason());
         submission.setAppealedAt(Instant.now());
 
         Submission saved = submissionRepository.save(submission);
         return ApiResponse.success(toResponse(saved));
+    }
+
+    private boolean teacherCanAccessSubmission(UserAccount teacher, Submission submission) {
+        Assignment assignment = assignmentRepository.findById(submission.getAssignmentId())
+                .orElse(null);
+        if (assignment == null) {
+            return false;
+        }
+        try {
+            ensureCourseAccess(teacher, assignment.getCourseId());
+            return true;
+        } catch (ResponseStatusException ex) {
+            return false;
+        }
     }
 
     private void ensureCourseAccess(UserAccount user, UUID courseId) {
@@ -194,6 +278,18 @@ public class SubmissionController {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to access submissions");
     }
 
+    private void ensureAssignmentOpenForSubmission(Assignment assignment, Instant now) {
+        if (!Boolean.TRUE.equals(assignment.getPublished())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Assignment is not published");
+        }
+        if (assignment.getReleaseAt() != null && now.isBefore(assignment.getReleaseAt())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Assignment is not yet open for submission");
+        }
+        if (assignment.getDeadline() != null && now.isAfter(assignment.getDeadline())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Assignment submission deadline has passed");
+        }
+    }
+
     private SubmissionResponse toResponse(Submission submission) {
         List<GradeSubmissionRequest.RubricScore> rubric = fromJson(submission.getRubricScores());
         return SubmissionResponse.builder()
@@ -209,6 +305,7 @@ public class SubmissionController {
                 .appealReason(submission.getAppealReason())
                 .appealedAt(submission.getAppealedAt())
                 .gradingTeacherId(submission.getGradingTeacherId())
+                .resubmitCount(submission.getResubmitCount())
                 .createdAt(submission.getCreatedAt())
                 .updatedAt(submission.getUpdatedAt())
                 .build();
