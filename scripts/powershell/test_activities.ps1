@@ -11,7 +11,7 @@ if (-not (Get-Command log_info -ErrorAction SilentlyContinue)) {
 $Script:CreatedActivityId = ""
 
 function test_activities_create {
-    log_info "Testing POST /api/activities"
+    log_info "Testing POST /api/v1/activities"
 
     $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $payload = ('{{"name":"Test Activity {0}","description":"Test activity description","activityDate":"2024-12-31","location":"Test Location","capacity":50,"status":"upcoming"}}' -f $timestamp)
@@ -49,7 +49,7 @@ function test_activities_create {
 }
 
 function test_activities_list {
-    log_info "Testing GET /api/activities"
+    log_info "Testing GET /api/v1/activities"
 
     $response = http_get "/activities?page=1&limit=20"
     $status = [string]$response.StatusCode
@@ -74,7 +74,7 @@ function test_activities_get {
         return $true
     }
 
-    log_info "Testing GET /api/activities/$Script:CreatedActivityId"
+    log_info "Testing GET /api/v1/activities/$Script:CreatedActivityId"
 
     $response = http_get "/activities/$Script:CreatedActivityId"
     $status = [string]$response.StatusCode

@@ -9,7 +9,7 @@ fi
 CREATED_MEMBER_ID=""
 
 test_members_create() {
-  log_info "Testing POST /api/members"
+  log_info "Testing POST /api/v1/members"
 
   local timestamp
   timestamp="$(date +%s)"
@@ -36,7 +36,7 @@ test_members_create() {
 }
 
 test_members_list() {
-  log_info "Testing GET /api/members"
+  log_info "Testing GET /api/v1/members"
 
   local response
   response="$(http_get "/members?page=1&limit=20")"
@@ -60,7 +60,7 @@ test_members_get() {
     return 0
   fi
 
-  log_info "Testing GET /api/members/$CREATED_MEMBER_ID"
+  log_info "Testing GET /api/v1/members/$CREATED_MEMBER_ID"
 
   local response
   response="$(http_get "/members/$CREATED_MEMBER_ID")"
@@ -84,7 +84,7 @@ test_members_delete() {
     return 0
   fi
 
-  log_info "Testing DELETE /api/members/$CREATED_MEMBER_ID"
+  log_info "Testing DELETE /api/v1/members/$CREATED_MEMBER_ID"
 
   local response
   response="$(http_delete "/members/$CREATED_MEMBER_ID")"

@@ -9,7 +9,7 @@ if (-not (Get-Command log_info -ErrorAction SilentlyContinue)) {
 }
 
 function test_dashboard_overview {
-    log_info "Testing GET /api/dashboard/overview"
+    log_info "Testing GET /api/v1/dashboard/overview"
 
     $response = http_get "/dashboard/overview"
     $body = $response.Body

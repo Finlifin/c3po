@@ -64,7 +64,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 @Validated
 @RequiredArgsConstructor
 public class CourseController {

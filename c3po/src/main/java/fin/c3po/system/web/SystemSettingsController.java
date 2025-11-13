@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/admin/system/settings")
+@RequestMapping("/api/v1/admin/system/settings")
 @Validated
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")

@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/members")
+@RequestMapping("/api/v1/members")
 public class MemberController {
 	private final MemberService memberService;
 

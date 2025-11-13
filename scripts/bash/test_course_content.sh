@@ -62,7 +62,7 @@ course_content_create_teacher() {
 }
 EOF
 
-  response="$(http_post "/v1/admin/users" "$payload")"
+  response="$(http_post "/admin/users" "$payload")"
   parse_response "$response"
 
   if ! assert_status "201" "$HTTP_STATUS" "Create temporary teacher"; then
@@ -77,7 +77,7 @@ EOF
 }
 
 course_content_create_course() {
-  log_info "Testing POST /api/courses as teacher"
+  log_info "Testing POST /api/v1/courses as teacher"
 
   local payload response course_id
   local suffix
@@ -120,7 +120,7 @@ course_content_create_module() {
     return 0
   fi
 
-  log_info "Testing POST /api/courses/${COURSE_CONTENT_COURSE_ID}/modules"
+  log_info "Testing POST /api/v1/courses/${COURSE_CONTENT_COURSE_ID}/modules"
   local payload response module_id
 
   read -r -d '' payload <<EOF
@@ -154,7 +154,7 @@ course_content_get_modules() {
     return 0
   fi
 
-  log_info "Testing GET /api/courses/${COURSE_CONTENT_COURSE_ID}/modules"
+  log_info "Testing GET /api/v1/courses/${COURSE_CONTENT_COURSE_ID}/modules"
 
   local response
   response="$(http_get "/courses/${COURSE_CONTENT_COURSE_ID}/modules")"

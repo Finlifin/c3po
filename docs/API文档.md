@@ -4,7 +4,7 @@
 - **版本**：v0.9.2（新增成绩与学习分析能力）
 - **覆盖范围**：学生端、教师端、管理员端的核心功能接口；统一认证、消息通知、异步任务与运维相关接口。
 - **目标读者**：后端/前端开发、QA、运维、产品经理、集成方。
-- **接口前缀（当前实现）**：`/api`（认证模块为 `/api/auth/**`）
+- **接口前缀（当前实现）**：`/api/v1`（认证模块为 `/api/v1/auth/**`）
 - 说明：原规划中的 `/api/v1` 版本前缀将于稳定版切换，现阶段以已实现路径为准。
 
 ## 2. 接口通用约定
@@ -18,7 +18,7 @@
 - 当前实现基于 JWT 的无状态认证（Spring Security + OncePerRequestFilter）：
   - 登录/注册返回 `accessToken`（JWT，默认有效期由配置 `security.jwt.expiration-ms` 控制，单位毫秒）、`tokenType=Bearer`、`expiresIn`（毫秒）。
   - 客户端请求头携带 `Authorization: Bearer {accessToken}`。
-  - 公开端点：`/api/auth/**`、`/actuator/health`、`/error`；其余端点默认需要认证。
+  - 公开端点：`/api/v1/auth/**`、`/actuator/health`、`/error`；其余端点默认需要认证。
   - 未认证访问返回 `401`，鉴权不足返回 `403`。
 - 配置：
   - `security.jwt.secret`（HS 密钥，至少 32 字符）
@@ -93,7 +93,7 @@
 
 ### 4.1 认证与会话（已实现）
 
-#### POST `/api/auth/login`
+#### POST `/api/v1/auth/login`
 - **角色**：全角色
 - **描述**：使用标识（用户名或邮箱）+密码登录。
 - **请求体（当前实现）**
@@ -114,13 +114,13 @@
 ```
 - **异常**：401（Invalid credentials）、403（Account is not active）
 
-#### POST `/api/auth/register`
+#### POST `/api/v1/auth/register`
 - **角色**：公开
 - **描述**：用户名/邮箱/密码注册（默认角色 Student，可传 `role`）。
 - **响应体**：同登录，直接返回 `accessToken`。
 - **异常**：409（Username/Email already exists）
 
-#### GET `/api/auth/me`
+#### GET `/api/v1/auth/me`
 - **角色**：已认证
 - **描述**：返回当前用户档案。
 - **请求头**：`Authorization: Bearer {token}`
@@ -137,7 +137,7 @@
 }
 ```
 
-#### POST `/api/auth/refresh`
+#### POST `/api/v1/auth/refresh`
 - **角色**：公开
 - **描述**：使用 `refreshToken` 获取新的 `accessToken`。
 - **请求体**
@@ -156,7 +156,7 @@
 ```
 - **异常**：401（Invalid/Expired refresh token）
 
-（说明：登出如启用，将以 `/api/auth/logout` 形式提供，作废当前 access token。）
+（说明：登出如启用，将以 `/api/v1/auth/logout` 形式提供，作废当前 access token。）
 
 #### GET `/actuator/health`
 - **角色**：公开
@@ -394,7 +394,7 @@
 
 课程与选课接口由 `CourseController` 暴露，统一响应结构为 `ApiResponse`。
 
-#### GET `/api/courses`
+#### GET `/api/v1/courses`
 - **角色**：任意已登录用户（学生/教师/管理员）。
 - **查询参数**：
   - `page`（默认 1）、`pageSize`（默认 20，最大 100）
@@ -405,12 +405,12 @@
 - **响应数据**：`CourseResponse[]`，每个元素附带 `metrics` 指标（当前选课人数、作业数量、章节数量）。
 - **说明**：分页信息写入 `meta.page / meta.pageSize / meta.total / meta.sort`。
 
-#### GET `/api/courses/{courseId}`
+#### GET `/api/v1/courses/{courseId}`
 - **角色**：任意已登录用户。
 - **响应数据**：单个 `CourseResponse`。
 - **异常**：`404`（课程不存在）。
 
-#### POST `/api/courses`
+#### POST `/api/v1/courses`
 - **角色**：`TEACHER` / `ADMIN`。
 - **请求体示例**：
   ```json
@@ -425,14 +425,14 @@
 - 登录教师不传 `teacherId` 时自动绑定为课程教师，初始状态 `DRAFT`。
 - **响应**：201 Created，返回新建 `CourseResponse`。
 
-#### PUT `/api/courses/{courseId}`
+#### PUT `/api/v1/courses/{courseId}`
 - **角色**：课程教师或管理员。
 - **允许字段**：`name`、`semester`、`credit`、`enrollLimit`（均为可选字段，未提供则不变）。
 - **异常**：
   - `404`：课程不存在。
   - `403`：非课程教师且非管理员。
 
-#### POST `/api/courses/{courseId}/publish`
+#### POST `/api/v1/courses/{courseId}/publish`
 - **角色**：课程教师或管理员。
 - 将课程状态设为 `PENDING_REVIEW` 并写入一条 `ApprovalRequest(type=COURSE_PUBLISH)`。
 - **响应体**（`CoursePublishResponse`）：
@@ -445,7 +445,7 @@
   }
   ```
 
-#### POST `/api/courses/{courseId}/enroll`
+#### POST `/api/v1/courses/{courseId}/enroll`
 - **角色**：`STUDENT`。
 - 仅支持对 `PUBLISHED` 状态课程选课；容量由 `enrollLimit` 限制，达到上限返回 `409`。
 - **响应体**（`CourseEnrollmentResponse`）：
@@ -462,14 +462,14 @@
   - `404`：课程不存在。
   - `409`：课程未开放、名额已满或重复选课。
 
-#### DELETE `/api/courses/{courseId}/enroll`
+#### DELETE `/api/v1/courses/{courseId}/enroll`
 - **角色**：`STUDENT`。
 - 将选课状态从 `ENROLLED` 变为 `DROPPED`；非激活状态退课返回 `409`。
 - **异常**：
   - `404`：当前学生未选该课。
   - `409`：选课状态并非 `ENROLLED`。
 
-#### GET `/api/students/{studentId}/courses`
+#### GET `/api/v1/students/{studentId}/courses`
 - **角色**：本人或 `TEACHER` / `ADMIN`。
 - **响应数据**：`StudentCourseResponse[]`，包含选课状态及作业完成情况：
   ```json
@@ -486,7 +486,7 @@
   ```
 - 作业统计来源于课程作业总数与学生最新一次提交的评分状态。
 
-#### GET `/api/courses/{courseId}/analytics/overview`
+#### GET `/api/v1/courses/{courseId}/analytics/overview`
 - **角色**：当前任意已登录用户（后续版本可限制为授课教师/管理员）。
 - **响应体**：`CourseAnalyticsResponse`，`completionRate` 基于已评分提交占比，其余列表字段目前返回空数组（预留扩展位）。
 
@@ -508,7 +508,7 @@
   - `fileSize`：文件大小（字节，可选；资源类型为链接时一般为空）
   - `downloadUrl`：访问/下载地址（最长 2048 字符；视频等静态资源为 OSS 回调写入的临时地址）
 
-#### GET `/api/courses/{courseId}/modules`
+#### GET `/api/v1/courses/{courseId}/modules`
 - **角色**：学生 / 教师 / 管理员（仅要求已登录）
 - **描述**：按 `displayOrder` 升序返回课程章节及已登记资源。
 - **路径参数**：`courseId`（UUID）
@@ -541,7 +541,7 @@
 ```
 - **错误码**：`404` 当课程不存在。
 
-#### POST `/api/courses/{courseId}/modules`
+#### POST `/api/v1/courses/{courseId}/modules`
 - **角色**：教师（课程负责人） / 管理员
 - **描述**：为课程创建新章节。后端会校验教师是否为当前课程负责人；管理员不受限制。
 - **路径参数**：`courseId`（UUID）
@@ -578,7 +578,7 @@
   - `404`：课程不存在
   - `403`：当前教师不是课程负责人
 
-#### POST `/api/modules/{moduleId}/resources/upload-url`
+#### POST `/api/v1/modules/{moduleId}/resources/upload-url`
 - **角色**：教师 / 管理员
 - **描述**：为指定章节申请临时直传凭证，供前端将大体量文件直传 OSS。当前实现仅验证章节存在，未校验章节归属教师。
 - **路径参数**：`moduleId`（UUID）
@@ -591,7 +591,7 @@
     "uploadUrl": "https://oss.c3po.local/upload/46bf45c8-4f19-4f0e-8d18-7badc6d24718",
     "method": "PUT",
     "expiresAt": "2025-11-13T08:10:00Z",
-    "callbackUrl": "/api/modules/46bf45c8-4f19-4f0e-8d18-7badc6d24718/resources"
+    "callbackUrl": "/api/v1/modules/46bf45c8-4f19-4f0e-8d18-7badc6d24718/resources"
   },
   "meta": null,
   "error": null
@@ -600,7 +600,7 @@
 - **错误码**：`404` 当章节不存在。
 - **备注**：上传完成后需使用下述 “确认资源信息” 接口落库；否则模块中不会出现该资源。
 
-#### POST `/api/modules/{moduleId}/resources`
+#### POST `/api/v1/modules/{moduleId}/resources`
 - **角色**：教师（课程负责人） / 管理员
 - **描述**：在章节下登记一个资源条目，通常在文件上传完成后调用，也可用于录入外部链接。
 - **路径参数**：`moduleId`（UUID）
@@ -641,7 +641,7 @@
   - `404`：章节或课程不存在
   - `403`：当前教师非课程负责人
 
-#### GET `/api/resources/{resourceId}`
+#### GET `/api/v1/resources/{resourceId}`
 - **角色**：学生 / 教师 / 管理员
 - **描述**：获取单个资源元数据及当前临时访问地址。
 - **路径参数**：`resourceId`（UUID）
@@ -651,10 +651,10 @@
 
 ### 4.5 作业与测验
 
-#### GET `/api/courses/{courseId}/assignments`
+#### GET `/api/v1/courses/{courseId}/assignments`
 - 返回作业/测验列表，附提交率、逾期率。
 
-#### POST `/api/courses/{courseId}/assignments`
+#### POST `/api/v1/courses/{courseId}/assignments`
 - **角色**：教师
 - 创建作业或测验，关键字段：
 - `type` 可选值：`ASSIGNMENT`、`QUIZ`、`PROJECT`（默认 `ASSIGNMENT`）。
@@ -678,16 +678,16 @@
 }
 ```
 
-#### GET `/api/assignments/{assignmentId}`
+#### GET `/api/v1/assignments/{assignmentId}`
 - 作业详情、说明文件、评分尺度。
 
-#### PATCH `/api/assignments/{assignmentId}`
+#### PATCH `/api/v1/assignments/{assignmentId}`
 - 更新作业；若截止时间修改，需通知已发布学生。
 
-#### POST `/api/assignments/{assignmentId}/publish`
+#### POST `/api/v1/assignments/{assignmentId}/publish`
 - 发布作业并触发通知。
 
-#### POST `/api/assignments/{assignmentId}/duplicate`
+#### POST `/api/v1/assignments/{assignmentId}/duplicate`
 - 复制作业到其他课程或学期。
 
 ### 4.6 学生提交、测验尝试与批改
@@ -704,7 +704,7 @@
   - `appealReason` / `appealedAt`
   - `submittedAt`、`createdAt`、`updatedAt`
 
-#### GET `/api/assignments/{assignmentId}/submissions`
+#### GET `/api/v1/assignments/{assignmentId}/submissions`
 - **角色**：教师 / 管理员
 - **描述**：查看指定作业的所有学生提交，返回 `SubmissionResponse[]`。
 - **响应示例**
@@ -728,12 +728,12 @@
 ```
 - **错误码**：`404` 作业不存在；`403` 非课程负责人访问。
 
-#### GET `/api/students/{studentId}/submissions`
+#### GET `/api/v1/students/{studentId}/submissions`
 - **角色**：学生（仅本人）、教师（仅限自己负责课程的提交）、管理员。
 - **描述**：按学生维度查看所有提交记录；若提交不再关联有效课程将被自动过滤。响应为 `SubmissionResponse[]`。
 - **错误码**：`403` 非法访问。
 
-#### POST `/api/assignments/{assignmentId}/submissions`
+#### POST `/api/v1/assignments/{assignmentId}/submissions`
 - **角色**：学生
 - **请求体**
 ```json
@@ -751,7 +751,7 @@
 - **响应**：201 Created，返回 `SubmissionResponse`。
 - **错误码**：`404` 作业不存在；`409` 作业未开放、已过截止或重复提交。
 
-#### PUT `/api/submissions/{submissionId}`
+#### PUT `/api/v1/submissions/{submissionId}`
 - **角色**：学生（提交者本人）
 - **描述**：在截止前重提附件或补充说明。
 - **业务规则**
@@ -760,12 +760,12 @@
   - 自动递增 `resubmitCount`，清空已发布成绩与批注。
   - 重提同样受发布时间与截止时间约束。
 
-#### GET `/api/submissions/{submissionId}`
+#### GET `/api/v1/submissions/{submissionId}`
 - **角色**：提交者本人、授课教师、管理员。
 - **描述**：返回单个 `SubmissionResponse`，包含评分与 Rubric。
 - **错误码**：`404` 提交不存在；`403` 未授权访问。
 
-#### POST `/api/submissions/{submissionId}/grade`
+#### POST `/api/v1/submissions/{submissionId}/grade`
 - **角色**：教师 / 管理员
 - **请求体**
 ```json
@@ -785,7 +785,7 @@
   - `publish=false` 时仅保存草稿，不修改提交状态。
   - 提交评分后清理历史申诉状态，`publish=true` 时状态改为 `GRADED`。
 
-#### POST `/api/submissions/{submissionId}/appeal`
+#### POST `/api/v1/submissions/{submissionId}/appeal`
 - **角色**：学生（提交者本人）
 - **请求体**
 ```json
@@ -797,10 +797,10 @@
   - 仅对已发布成绩的提交允许申诉，且每份提交仅能申诉一次。
   - 申诉成功后状态变为 `APPEALED`，记录 `appealReason` 与时间戳。
 
-#### POST `/api/submissions/{submissionId}/ai-review`
+#### POST `/api/v1/submissions/{submissionId}/ai-review`
 - **状态**：规划中（当前版本返回 404，占位接口）。
 
-#### POST `/api/assignments/{assignmentId}/quiz-attempts`
+#### POST `/api/v1/assignments/{assignmentId}/quiz-attempts`
 - **角色**：学生
 - **描述**：针对 `type=QUIZ` 的作业创建测验尝试。若缺省 `submittedAt`，系统记录为草稿（`status=IN_PROGRESS`）；填写则表示立即交卷（`status=SUBMITTED`）。
 - **请求体（示例）**
@@ -816,7 +816,7 @@
 }
 ```
 
-#### PUT `/api/quiz-attempts/{attemptId}`
+#### PUT `/api/v1/quiz-attempts/{attemptId}`
 - **角色**：学生
 - **描述**：更新测验作答或交卷状态；`submit=true` 会在未显式提供 `submittedAt` 时使用服务器当前时间交卷。
 - **请求体（示例）**
@@ -830,19 +830,19 @@
 }
 ```
 
-#### GET `/api/assignments/{assignmentId}/quiz-attempts`
+#### GET `/api/v1/assignments/{assignmentId}/quiz-attempts`
 - **角色**：教师 / 管理员
 - **描述**：列出测验下的全部尝试（返回 `QuizAttemptResponse` 列表）。
 
-#### GET `/api/assignments/{assignmentId}/quiz-attempts/me`
+#### GET `/api/v1/assignments/{assignmentId}/quiz-attempts/me`
 - **角色**：学生
 - **描述**：查看本人在该测验下的全部尝试记录。
 
-#### GET `/api/quiz-attempts/{attemptId}`
+#### GET `/api/v1/quiz-attempts/{attemptId}`
 - **角色**：学生（本人）/教师/管理员
 - **描述**：查询单个测验尝试详情；教师需具备课程管理权限。
 
-#### POST `/api/quiz-attempts/{attemptId}/grade`
+#### POST `/api/v1/quiz-attempts/{attemptId}/grade`
 - **角色**：教师 / 管理员
 - **描述**：登记测验得分与点评，状态自动切换为 `GRADED`。
 - **请求体（示例）**
@@ -857,7 +857,7 @@
 
 ### 4.7 成绩与学习分析
 
-#### GET `/api/students/{studentId}/scores`
+#### GET `/api/v1/students/{studentId}/scores`
 - **角色**：学生本人、教师、管理员（会自动校验权限）
 - **描述**：同时返回成绩明细、综合概览、学习趋势以及异步导出建议。
 - **响应体（节选）**
@@ -927,13 +927,13 @@
         "studentId": "2b01...",
         "courseIds": ["c001...", "c002..."]
       },
-      "instructions": "调用 POST /api/jobs/reports 并传入建议参数即可生成成绩导出任务。"
+      "instructions": "调用 POST /api/v1/jobs/reports 并传入建议参数即可生成成绩导出任务。"
     }
   }
 }
 ```
 
-#### GET `/api/courses/{courseId}/scores`
+#### GET `/api/v1/courses/{courseId}/scores`
 - **角色**：教师/管理员
 - **查询参数**：
   - `component`（可选）：仅返回指定成绩构成
@@ -944,10 +944,10 @@
   - `componentAverages`：各构成平均分
   - `topPerformers`、`needsAttention`：高分/风险学生列表（UUID）
 
-#### POST `/api/courses/{courseId}/scores/publish`
+#### POST `/api/v1/courses/{courseId}/scores/publish`
 - 批量发布成绩；可设置发布时间（立即或预约），重复发布会自动覆盖同一构成。
 
-#### GET `/api/courses/{courseId}/analytics/overview`
+#### GET `/api/v1/courses/{courseId}/analytics/overview`
 - **描述**：教学仪表盘核心指标，结合选课、作业、成绩计算滞后名单、难度系数等。
 - **响应体字段**：
   - `completionRate`：已批改作业数 /（选课人数 × 作业总数）
@@ -958,14 +958,14 @@
   - `atRiskStudents`：成绩偏低或缺交较多的学生 UUID
   - `insights`：自动生成的教学建议摘要
 
-#### POST `/api/analytics/reminders`
+#### POST `/api/v1/analytics/reminders`
 - 对滞后学生批量发送提醒，可指定渠道。
 
 ### 4.8 消息、待办与 AI 助手
 
 #### 4.8.1 消息通知
 
-##### GET `/api/notifications`
+##### GET `/api/v1/notifications`
 - **角色**：已认证用户（`ROLE_STUDENT|ROLE_TEACHER|ROLE_ADMIN`），按创建时间倒序返回当前可见的通知。
 - **查询参数**
   - `page`（默认 `1`）：页码，最小值 1。
@@ -1011,7 +1011,7 @@
 }
 ```
 
-##### POST `/api/notifications`
+##### POST `/api/v1/notifications`
 - **角色**：`ROLE_TEACHER` 或 `ROLE_ADMIN`。
 - **描述**：创建并立即发送一条通知：保存记录、标记状态为 `SENT`，写入 `sentAt`。
 - **请求体验证**
@@ -1026,7 +1026,7 @@
 
 #### 4.8.2 待办事项
 
-##### GET `/api/todos`
+##### GET `/api/v1/todos`
 - **角色**：已认证用户；根据当前登录用户的 `UserRole` 返回对应待办。
 - **业务规则**
   - 学生 (`ROLE_STUDENT`)：遍历已选课程，筛选未评分/未提交的作业，返回 `type=assignment`、`status=pending|submitted` 待办。
@@ -1061,7 +1061,7 @@
 
 #### 4.8.3 AI 助手对话
 
-##### POST `/api/assistant/chat`
+##### POST `/api/v1/assistant/chat`
 - **角色**：默认校验需登录；后续可结合用户偏好（`/api/v1/users/me/preferences`) 中的 `aiAssistantEnabled` 开关。
 - **描述**：基于课程上下文、历史对话为学生/教师提供智能辅学回答。接口支持两种响应模式：
   1. **JSON 模式**：返回完整回答及推荐的下一步操作。
@@ -1103,7 +1103,7 @@
 ### 4.9 管理员审批与系统设置
 
 #### 4.9.1 审批池查询
-- **GET** `/api/admin/approvals`
+- **GET** `/api/v1/admin/approvals`
 - **角色**：管理员 (`ROLE_ADMIN`)
 - **描述**：分页查询审批池，支持状态与类型过滤。返回值沿用统一响应包装（`data` 为审批项数组，`meta` 为分页信息）。
 - **查询参数**：
@@ -1140,7 +1140,7 @@
 ```
 
 #### 4.9.2 审批决策
-- **POST** `/api/admin/approvals/{requestId}/decision`
+- **POST** `/api/v1/admin/approvals/{requestId}/decision`
 - **角色**：管理员
 - **描述**：对指定审批单执行通过或驳回操作；系统自动记录处理人和时间戳。
 - **请求体**
@@ -1154,11 +1154,11 @@
 - **错误码**：`404`（未找到审批单）、`400`（状态非法）、`403`（非管理员）。
 
 #### 4.9.3 平台运行指标
-- **GET** `/api/admin/metrics`
+- **GET** `/api/v1/admin/metrics`
 - 汇总用户总数、课程总数、已发布课程数、作业总数与待审批事项数量，用于后台仪表盘展示。
 
 #### 4.9.4 系统设置管理
-- **GET** `/api/admin/system/settings`
+- **GET** `/api/v1/admin/system/settings`
   - **描述**：读取当前平台全局设置。系统保证存在一条配置记录，若尚未初始化将返回默认值。
   - **响应示例**
 ```json
@@ -1189,7 +1189,7 @@
   "error": null
 }
 ```
-- **PUT** `/api/admin/system/settings`
+- **PUT** `/api/v1/admin/system/settings`
   - **描述**：按需覆盖上述字段，未提供的字段维持原值。`maintenanceWindow.startAt` 需早于 `maintenanceWindow.endAt`；数字阈值范围见校验约束。
   - **请求示例**
 ```json
@@ -1220,7 +1220,7 @@
 
 ### 4.10 异步任务与报表
 
-#### POST `/api/jobs/reports`
+#### POST `/api/v1/jobs/reports`
 - 创建报表（成绩单、课程统计）。请求示例：
 ```json
 {
@@ -1237,10 +1237,10 @@
 }
 ```
 
-#### GET `/api/jobs/{jobId}`
+#### GET `/api/v1/jobs/{jobId}`
 - 查询任务状态：`queued|processing|succeeded|failed`；成功后返回 `resultUrl`。
 
-#### POST `/api/jobs/{jobId}/cancel`
+#### POST `/api/v1/jobs/{jobId}/cancel`
 - 取消未完成任务。
 
 ### 4.11 系统健康与运维
@@ -1248,10 +1248,10 @@
 #### GET `/actuator/health`
 - 基础健康检查，返回应用、数据库、对象存储、消息队列状态。
 
-#### GET `/api/health/metrics`
+#### GET `/api/v1/health/metrics`
 - 扩展指标（请求数、错误率、延迟分位数）。
 
-#### POST `/api/admin/cache/refresh`
+#### POST `/api/v1/admin/cache/refresh`
 - 刷新缓存（课程目录、配置项等）；需要 `admin` 权限并记录审计。
 
 ## 5. 数据同步与外部集成

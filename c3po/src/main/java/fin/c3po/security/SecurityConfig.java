@@ -47,7 +47,7 @@ public class SecurityConfig {
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/auth/**",
+                                "/api/v1/auth/**",
                                 "/actuator/health",
                                 "/error")
                         .permitAll()

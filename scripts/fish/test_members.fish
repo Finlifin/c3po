@@ -6,7 +6,7 @@ source (dirname (status --current-filename))/lib.fish
 set -g CREATED_MEMBER_ID ""
 
 function test_members_create
-    log_info "Testing POST /api/members"
+    log_info "Testing POST /api/v1/members"
     
     set -l timestamp (date +%s)
     set -l payload (printf '{"name":"Test Member %s","studentId":"S%s","major":"Computer Science","joinDate":"2024-01-01","status":"active","role":"member","email":"test%s@example.com","phone":"1234567890"}' $timestamp $timestamp $timestamp)
@@ -35,7 +35,7 @@ function test_members_create
 end
 
 function test_members_list
-    log_info "Testing GET /api/members"
+    log_info "Testing GET /api/v1/members"
     
     set -l response (http_get "/members?page=1&limit=20")
     set -l parsed (parse_response $response)
@@ -62,7 +62,7 @@ function test_members_get
         return 0
     end
     
-    log_info "Testing GET /api/members/$CREATED_MEMBER_ID"
+    log_info "Testing GET /api/v1/members/$CREATED_MEMBER_ID"
     
     set -l response (http_get "/members/$CREATED_MEMBER_ID")
     set -l parsed (parse_response $response)
@@ -89,7 +89,7 @@ function test_members_delete
         return 0
     end
     
-    log_info "Testing DELETE /api/members/$CREATED_MEMBER_ID"
+    log_info "Testing DELETE /api/v1/members/$CREATED_MEMBER_ID"
     
     set -l response (http_delete "/members/$CREATED_MEMBER_ID")
     set -l parsed (parse_response $response)

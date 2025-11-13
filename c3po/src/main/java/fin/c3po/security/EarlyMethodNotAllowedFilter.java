@@ -29,15 +29,15 @@ public class EarlyMethodNotAllowedFilter implements Filter {
     
     static {
         // 认证端点
-        ENDPOINT_METHODS.put("/api/auth/login", Set.of(HttpMethod.POST));
-        ENDPOINT_METHODS.put("/api/auth/register", Set.of(HttpMethod.POST));
-        ENDPOINT_METHODS.put("/api/auth/me", Set.of(HttpMethod.GET));
+        ENDPOINT_METHODS.put("/api/v1/auth/login", Set.of(HttpMethod.POST));
+        ENDPOINT_METHODS.put("/api/v1/auth/register", Set.of(HttpMethod.POST));
+        ENDPOINT_METHODS.put("/api/v1/auth/me", Set.of(HttpMethod.GET));
         
         // 其他GET端点示例
-        ENDPOINT_METHODS.put("/api/dashboard/overview", Set.of(HttpMethod.GET));
-        ENDPOINT_METHODS.put("/api/courses", Set.of(HttpMethod.GET, HttpMethod.POST));
-        ENDPOINT_METHODS.put("/api/members", Set.of(HttpMethod.GET, HttpMethod.POST));
-        ENDPOINT_METHODS.put("/api/activities", Set.of(HttpMethod.GET, HttpMethod.POST));
+        ENDPOINT_METHODS.put("/api/v1/dashboard/overview", Set.of(HttpMethod.GET));
+        ENDPOINT_METHODS.put("/api/v1/courses", Set.of(HttpMethod.GET, HttpMethod.POST));
+        ENDPOINT_METHODS.put("/api/v1/members", Set.of(HttpMethod.GET, HttpMethod.POST));
+        ENDPOINT_METHODS.put("/api/v1/activities", Set.of(HttpMethod.GET, HttpMethod.POST));
     }
 
     @Override

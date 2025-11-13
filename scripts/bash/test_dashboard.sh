@@ -7,7 +7,7 @@ if ! declare -F log_info >/dev/null 2>&1; then
 fi
 
 test_dashboard_overview() {
-  log_info "Testing GET /api/dashboard/overview"
+  log_info "Testing GET /api/v1/dashboard/overview"
 
   local response
   response="$(http_get "/dashboard/overview")"

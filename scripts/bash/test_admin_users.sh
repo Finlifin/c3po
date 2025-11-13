@@ -50,7 +50,7 @@ test_admin_users_list() {
   log_info "Testing GET /api/v1/admin/users"
 
   local response
-  response="$(http_get "/v1/admin/users?page=1&pageSize=5")"
+  response="$(http_get "/admin/users?page=1&pageSize=5")"
   parse_response "$response"
 
   if ! assert_status "200" "$HTTP_STATUS" "List admin users"; then
@@ -90,7 +90,7 @@ test_admin_users_bulk_create() {
 EOF
 
   local response
-  response="$(http_post "/v1/admin/users" "$payload")"
+  response="$(http_post "/admin/users" "$payload")"
   parse_response "$response"
 
   if ! assert_status "201" "$HTTP_STATUS" "Bulk create student user"; then
@@ -128,7 +128,7 @@ test_admin_users_update_status() {
   payload='{"status":"DISABLED","reason":"Automated regression test disable"}'
 
   local response
-  response="$(http_put "/v1/admin/users/${ADMIN_USERS_LAST_ID}/status" "$payload")"
+  response="$(http_put "/admin/users/${ADMIN_USERS_LAST_ID}/status" "$payload")"
   parse_response "$response"
 
   if ! assert_status "200" "$HTTP_STATUS" "Update user status"; then

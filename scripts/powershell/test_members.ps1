@@ -11,7 +11,7 @@ if (-not (Get-Command log_info -ErrorAction SilentlyContinue)) {
 $Script:CreatedMemberId = ""
 
 function test_members_create {
-    log_info "Testing POST /api/members"
+    log_info "Testing POST /api/v1/members"
 
     $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $payload = ('{{"name":"Test Member {0}","studentId":"S{0}","major":"Computer Science","joinDate":"2024-01-01","status":"active","role":"member","email":"test{0}@example.com","phone":"1234567890"}}' -f $timestamp)
@@ -49,7 +49,7 @@ function test_members_create {
 }
 
 function test_members_list {
-    log_info "Testing GET /api/members"
+    log_info "Testing GET /api/v1/members"
 
     $response = http_get "/members?page=1&limit=20"
     $status = [string]$response.StatusCode
@@ -74,7 +74,7 @@ function test_members_get {
         return $true
     }
 
-    log_info "Testing GET /api/members/$Script:CreatedMemberId"
+    log_info "Testing GET /api/v1/members/$Script:CreatedMemberId"
 
     $response = http_get "/members/$Script:CreatedMemberId"
     $status = [string]$response.StatusCode
@@ -99,7 +99,7 @@ function test_members_delete {
         return $true
     }
 
-    log_info "Testing DELETE /api/members/$Script:CreatedMemberId"
+    log_info "Testing DELETE /api/v1/members/$Script:CreatedMemberId"
 
     $response = http_delete "/members/$Script:CreatedMemberId"
     $status = [string]$response.StatusCode

@@ -9,7 +9,7 @@ if (-not (Get-Command log_info -ErrorAction SilentlyContinue)) {
 }
 
 function test_auth_login {
-    log_info "Testing POST /api/auth/login"
+    log_info "Testing POST /api/v1/auth/login"
 
     $payload = ('{{"identifier":"{0}","password":"{1}"}}' -f $Script:AdminUsername, $Script:AdminPassword)
     $response = http_post "/auth/login" $payload
@@ -39,7 +39,7 @@ function test_auth_login {
 }
 
 function test_auth_me {
-    log_info "Testing GET /api/auth/me"
+    log_info "Testing GET /api/v1/auth/me"
 
     $response = http_get "/auth/me"
     $body = $response.Body

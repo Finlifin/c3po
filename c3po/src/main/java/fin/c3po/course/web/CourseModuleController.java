@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 @Validated
 @RequiredArgsConstructor
 public class CourseModuleController {
@@ -115,7 +115,7 @@ public class CourseModuleController {
                 .uploadUrl("https://oss.c3po.local/upload/" + moduleId)
                 .method("PUT")
                 .expiresAt(Instant.now().plus(10, ChronoUnit.MINUTES))
-                .callbackUrl("/api/modules/" + moduleId + "/resources")
+                .callbackUrl("/api/v1/modules/" + moduleId + "/resources")
                 .build();
         return ApiResponse.success(response);
     }

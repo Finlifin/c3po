@@ -7,7 +7,7 @@ if ! declare -F log_info >/dev/null 2>&1; then
 fi
 
 test_auth_login() {
-  log_info "Testing POST /api/auth/login"
+  log_info "Testing POST /api/v1/auth/login"
 
   local payload
   payload=$(printf '{"identifier":"%s","password":"%s"}' "$ADMIN_USERNAME" "$ADMIN_PASSWORD")
@@ -35,7 +35,7 @@ test_auth_login() {
 }
 
 test_auth_me() {
-  log_info "Testing GET /api/auth/me"
+  log_info "Testing GET /api/v1/auth/me"
 
   local response
   response="$(http_get "/auth/me")"

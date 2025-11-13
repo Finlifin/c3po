@@ -83,7 +83,7 @@ function CourseContent-CreateCourse {
         return
     }
 
-    log_info "Testing POST /api/courses as teacher"
+    log_info "Testing POST /api/v1/courses as teacher"
 
     $suffix = "{0}{1}" -f [int][DateTimeOffset]::Now.ToUnixTimeSeconds(), (Get-Random -Minimum 100 -Maximum 999)
     $payload = @"
@@ -124,7 +124,7 @@ function CourseContent-CreateModule {
         return
     }
 
-    log_info "Testing POST /api/courses/$($Script:CourseContentCourseId)/modules"
+    log_info "Testing POST /api/v1/courses/$($Script:CourseContentCourseId)/modules"
 
     $payload = '{
   "title": "第 1 周 · 自动化测试章节",
@@ -157,7 +157,7 @@ function CourseContent-GetModules {
         return
     }
 
-    log_info "Testing GET /api/courses/$($Script:CourseContentCourseId)/modules"
+    log_info "Testing GET /api/v1/courses/$($Script:CourseContentCourseId)/modules"
 
     $response = http_get "/courses/$($Script:CourseContentCourseId)/modules"
     $status = [string]$response.StatusCode

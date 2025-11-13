@@ -8,7 +8,7 @@ fish scripts/fish/quick_test.fish
 
 这会测试：
 - 服务器健康检查
-- `/api/auth/login` 端点
+- `/api/v1/auth/login` 端点
 - `/auth/login` 端点（用于诊断路径配置）
 
 **查看输出，找到实际工作的路径！**
@@ -46,12 +46,12 @@ curl http://localhost:8080/actuator/health
 
 ### 检查路径配置
 ```bash
-# 测试 /api 前缀
-curl -X POST http://localhost:8080/api/auth/login \
+# 测试 /api/v1 前缀
+curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"identifier":"admin","password":"admin123"}'
 
-# 测试无 /api 前缀
+# 测试无 /api/v1 前缀
 curl -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
   -d '{"identifier":"admin","password":"admin123"}'
@@ -72,7 +72,7 @@ curl -X POST http://localhost:8080/auth/login \
 
 ```fish
 # 修改API URL（根据快速测试结果）
-set -gx API_BASE_URL "http://localhost:8080/api"
+set -gx API_BASE_URL "http://localhost:8080/api/v1"
 
 # 修改认证信息
 set -gx ADMIN_USERNAME "admin"

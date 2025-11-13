@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 
-API_BASE_URL = os.environ.get("C3PO_API_BASE_URL", "http://localhost:8080/api")
+API_BASE_URL = os.environ.get("C3PO_API_BASE_URL", "http://localhost:8080/api/v1")
 API_TIMEOUT = float(os.environ.get("C3PO_API_TIMEOUT", "10"))
 ADMIN_USERNAME = os.environ.get("C3PO_ADMIN_USERNAME", "testadmin")
 ADMIN_PASSWORD = os.environ.get("C3PO_ADMIN_PASSWORD", "admin123")
@@ -209,7 +209,7 @@ def print_summary() -> bool:
 
 
 def test_auth_login() -> None:
-    log_info("Testing POST /api/auth/login")
+    log_info("Testing POST /api/v1/auth/login")
 
     payload = json.dumps({"identifier": ADMIN_USERNAME, "password": ADMIN_PASSWORD})
     body, status = http_post("/auth/login", payload)
@@ -229,7 +229,7 @@ def test_auth_login() -> None:
 
 
 def test_auth_me() -> None:
-    log_info("Testing GET /api/auth/me")
+    log_info("Testing GET /api/v1/auth/me")
     body, status = http_get("/auth/me")
 
     log_info(f"Response body: {body}")
@@ -264,7 +264,7 @@ def run_auth_tests() -> None:
 
 
 def test_dashboard_overview() -> None:
-    log_info("Testing GET /api/dashboard/overview")
+    log_info("Testing GET /api/v1/dashboard/overview")
     body, status = http_get("/dashboard/overview")
 
     log_info(f"Response body: {body}")
@@ -289,7 +289,7 @@ def run_dashboard_tests() -> None:
 
 
 def test_members_create(state: dict) -> None:
-    log_info("Testing POST /api/members")
+    log_info("Testing POST /api/v1/members")
     timestamp = int(time.time())
     payload = {
         "name": f"Test Member {timestamp}",
@@ -319,7 +319,7 @@ def test_members_create(state: dict) -> None:
 
 
 def test_members_list() -> None:
-    log_info("Testing GET /api/members")
+    log_info("Testing GET /api/v1/members")
     body, status = http_get("/members?page=1&limit=20")
 
     log_info(f"Response status: {status}")
@@ -335,7 +335,7 @@ def test_members_get(state: dict) -> None:
         log_warn("Skipping GET member test (no member created)")
         return
 
-    log_info(f"Testing GET /api/members/{member_id}")
+    log_info(f"Testing GET /api/v1/members/{member_id}")
     body, status = http_get(f"/members/{member_id}")
 
     log_info(f"Response status: {status}")
@@ -351,7 +351,7 @@ def test_members_delete(state: dict) -> None:
         log_warn("Skipping DELETE member test (no member created)")
         return
 
-    log_info(f"Testing DELETE /api/members/{member_id}")
+    log_info(f"Testing DELETE /api/v1/members/{member_id}")
     _, status = http_delete(f"/members/{member_id}")
 
     log_info(f"Response status: {status}")
@@ -376,7 +376,7 @@ def run_members_tests() -> None:
 
 
 def test_activities_create(state: dict) -> None:
-    log_info("Testing POST /api/activities")
+    log_info("Testing POST /api/v1/activities")
     timestamp = int(time.time())
     payload = {
         "name": f"Test Activity {timestamp}",
@@ -404,7 +404,7 @@ def test_activities_create(state: dict) -> None:
 
 
 def test_activities_list() -> None:
-    log_info("Testing GET /api/activities")
+    log_info("Testing GET /api/v1/activities")
     body, status = http_get("/activities?page=1&limit=20")
 
     log_info(f"Response status: {status}")
@@ -420,7 +420,7 @@ def test_activities_get(state: dict) -> None:
         log_warn("Skipping GET activity test (no activity created)")
         return
 
-    log_info(f"Testing GET /api/activities/{activity_id}")
+    log_info(f"Testing GET /api/v1/activities/{activity_id}")
     body, status = http_get(f"/activities/{activity_id}")
 
     log_info(f"Response status: {status}")

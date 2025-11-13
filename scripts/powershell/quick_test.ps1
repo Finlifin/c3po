@@ -57,17 +57,17 @@ Write-Section "Health check response:"
 Write-Preview -Content $healthResponse
 Write-Host ""
 
-Write-Section "2. Testing /api/auth/login endpoint..."
-Write-Section ("URL: {0}/api/auth/login" -f $apiBase)
+Write-Section "2. Testing /api/v1/auth/login endpoint..."
+Write-Section ("URL: {0}/api/v1/auth/login" -f $apiBase)
 $loginPayload = '{"identifier":"admin","password":"admin123"}'
 Write-Section ("Payload: {0}" -f $loginPayload)
 Write-Host ""
 Write-Section "Response:"
-$loginResponse = Invoke-DiagnosticRequest -Method "POST" -Uri "$apiBase/api/auth/login" -Body $loginPayload
+$loginResponse = Invoke-DiagnosticRequest -Method "POST" -Uri "$apiBase/api/v1/auth/login" -Body $loginPayload
 Write-Preview -Content $loginResponse
 Write-Host ""
 
-Write-Section "3. Testing if /auth/login works (without /api prefix)..."
+Write-Section "3. Testing if /auth/login works (without /api/v1 prefix)..."
 Write-Section ("URL: {0}/auth/login" -f $apiBase)
 $loginAltResponse = Invoke-DiagnosticRequest -Method "POST" -Uri "$apiBase/auth/login" -Body $loginPayload
 Write-Preview -Content $loginAltResponse

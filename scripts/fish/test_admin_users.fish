@@ -38,7 +38,7 @@ function admin_users_assert_json_equals
     set -l expected $argv[3]
     set -l message $argv[4]
 
-    set -l actual (echo $json | jq -r ".${field} // empty")
+    set -l actual (echo $json | jq -r --arg field "$field" 'try (reduce ($field | split(".")) as $seg (.; .[$seg])) // empty')
     if test "$actual" = "$expected"
         log_success "$message ('$actual')"
         return 0
@@ -54,7 +54,7 @@ end
 function test_admin_users_list
     log_info "Testing GET /api/v1/admin/users"
 
-    set -l response (http_get "/v1/admin/users?page=1&pageSize=5")
+    set -l response (http_get "/admin/users?page=1&pageSize=5")
     set -l parsed (parse_response $response)
     set -l body $parsed[1]
     set -l http_code $parsed[2]
@@ -92,7 +92,7 @@ function test_admin_users_bulk_create
   ]
 }' $username $email $password $suffix $suffix)
 
-    set -l response (http_post "/v1/admin/users" $payload)
+    set -l response (http_post "/admin/users" $payload)
     set -l parsed (parse_response $response)
     set -l body $parsed[1]
     set -l http_code $parsed[2]
@@ -127,7 +127,7 @@ function test_admin_users_update_status
     log_info "Testing PUT /api/v1/admin/users/$ADMIN_USERS_LAST_ID/status"
 
     set -l payload '{"status":"DISABLED","reason":"Automated regression test disable"}'
-    set -l response (http_put "/v1/admin/users/$ADMIN_USERS_LAST_ID/status" $payload)
+    set -l response (http_put "/admin/users/$ADMIN_USERS_LAST_ID/status" $payload)
     set -l parsed (parse_response $response)
     set -l body $parsed[1]
     set -l http_code $parsed[2]

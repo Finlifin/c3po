@@ -55,16 +55,16 @@ def main() -> int:
 
     login_payload = '{"identifier":"admin","password":"admin123"}'
 
-    print("2. Testing /api/auth/login endpoint...")
-    print(f"URL: {API_BASE}/api/auth/login")
+    print("2. Testing /api/v1/auth/login endpoint...")
+    print(f"URL: {API_BASE}/api/v1/auth/login")
     print(f"Payload: {login_payload}")
     print("")
-    status, body = request("POST", f"{API_BASE}/api/auth/login", payload=login_payload)
+    status, body = request("POST", f"{API_BASE}/api/v1/auth/login", payload=login_payload)
     print("Response:")
     print(preview(f"HTTP {status}\n{body}"))
     print("")
 
-    print("3. Testing if /auth/login works (without /api prefix)...")
+    print("3. Testing if /auth/login works (without /api/v1 prefix)...")
     print(f"URL: {API_BASE}/auth/login")
     status, body = request("POST", f"{API_BASE}/auth/login", payload=login_payload)
     print("Response:")

@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Locale;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 @Validated
 @RequiredArgsConstructor
 public class NotificationController {

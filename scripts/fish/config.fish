@@ -2,7 +2,7 @@
 # API测试配置文件
 
 # API基础配置
-set -gx API_BASE_URL "http://localhost:8080/api"
+set -gx API_BASE_URL "http://localhost:8080/api/v1"
 set -gx API_TIMEOUT 10
 
 # 认证配置

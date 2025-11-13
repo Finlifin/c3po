@@ -56,7 +56,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 @Validated
 @RequiredArgsConstructor
 public class ScoreController {
@@ -263,7 +263,7 @@ public class ScoreController {
                         "studentId", studentId.toString(),
                         "courseIds", scoresByCourse.keySet().stream().map(UUID::toString).toList()
                 ))
-                .instructions("调用 POST /api/jobs/reports 并传入建议参数即可生成成绩导出任务。")
+                .instructions("调用 POST /api/v1/jobs/reports 并传入建议参数即可生成成绩导出任务。")
                 .build();
 
         return StudentScoresResponse.builder()

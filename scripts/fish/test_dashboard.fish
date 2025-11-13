@@ -4,7 +4,7 @@
 source (dirname (status --current-filename))/lib.fish
 
 function test_dashboard_overview
-    log_info "Testing GET /api/dashboard/overview"
+    log_info "Testing GET /api/v1/dashboard/overview"
     
     set -l response (http_get "/dashboard/overview")
     set -l parsed (parse_response $response)

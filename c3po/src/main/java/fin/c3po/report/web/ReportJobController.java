@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/jobs")
+@RequestMapping("/api/v1/jobs")
 @Validated
 @RequiredArgsConstructor
 public class ReportJobController {

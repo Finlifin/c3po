@@ -50,7 +50,7 @@ fish scripts/fish/test_members.fish -c run_members_tests
 编辑 `config.fish` 文件修改API URL、认证信息等：
 
 ```fish
-set -gx API_BASE_URL "http://localhost:8080/api"
+set -gx API_BASE_URL "http://localhost:8080/api/v1"
 set -gx ADMIN_USERNAME "admin"
 set -gx ADMIN_PASSWORD "admin123"
 ```
@@ -68,7 +68,7 @@ set -gx ADMIN_PASSWORD "admin123"
 ==================================
 Authentication Tests
 ==================================
-[INFO] Testing POST /api/auth/login
+[INFO] Testing POST /api/v1/auth/login
 [✓] Login request (HTTP 200)
 [✓] Login response has accessToken (field 'accessToken' exists)
 [✓] Login response has tokenType (field 'tokenType' exists)

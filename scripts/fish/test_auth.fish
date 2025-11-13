@@ -4,7 +4,7 @@
 source (dirname (status --current-filename))/lib.fish
 
 function test_auth_login
-    log_info "Testing POST /api/auth/login"
+    log_info "Testing POST /api/v1/auth/login"
     
     set -l payload (printf '{"identifier":"%s","password":"%s"}' $ADMIN_USERNAME $ADMIN_PASSWORD)
     set -l response (http_post "/auth/login" $payload)
@@ -35,7 +35,7 @@ function test_auth_login
 end
 
 function test_auth_me
-    log_info "Testing GET /api/auth/me"
+    log_info "Testing GET /api/v1/auth/me"
     
     set -l response (http_get "/auth/me")
     set -l parsed (parse_response $response)

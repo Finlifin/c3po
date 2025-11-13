@@ -77,7 +77,7 @@ def _assert_json_equals(json_payload: str, field: str, expected: str, message: s
 
 def test_admin_users_list() -> None:
     log_info("Testing GET /api/v1/admin/users")
-    body, status = http_get("/v1/admin/users?page=1&pageSize=5")
+    body, status = http_get("/admin/users?page=1&pageSize=5")
 
     if not assert_status("200", status, "List admin users"):
         return
@@ -113,7 +113,7 @@ def test_admin_users_bulk_create() -> None:
         ]
     }
 
-    body, status = http_post("/v1/admin/users", json.dumps(payload))
+    body, status = http_post("/admin/users", json.dumps(payload))
 
     if not assert_status("201", status, "Bulk create student user"):
         return
@@ -144,7 +144,7 @@ def test_admin_users_update_status() -> None:
     payload = json.dumps(
         {"status": "DISABLED", "reason": "Automated regression test disable"}
     )
-    body, status = http_put(f"/v1/admin/users/{ADMIN_USERS_LAST_ID}/status", payload)
+    body, status = http_put(f"/admin/users/{ADMIN_USERS_LAST_ID}/status", payload)
 
     if not assert_status("200", status, "Update user status"):
         return

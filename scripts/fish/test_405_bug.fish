@@ -5,7 +5,7 @@ echo "Testing HTTP 405 Method Not Allowed bug..."
 echo ""
 
 echo "1. Testing GET on POST endpoint (should return 405 quickly):"
-echo "URL: http://localhost:8080/api/auth/login"
+echo "URL: http://localhost:8080/api/v1/auth/login"
 set start_time (date +%s)
 
 # 使用短超时时间，如果挂起说明有问题
@@ -13,7 +13,7 @@ set response (curl -s -X GET \
     -H "Content-Type: application/json" \
     --max-time 3 \
     -w "\n%{http_code}" \
-    http://localhost:8080/api/auth/login 2>&1)
+    http://localhost:8080/api/v1/auth/login 2>&1)
 
 set end_time (date +%s)
 set duration (math $end_time - $start_time)
@@ -36,7 +36,7 @@ set response2 (curl -s -X POST \
     -H "Content-Type: application/json" \
     --max-time 3 \
     -w "\n%{http_code}" \
-    http://localhost:8080/api/dashboard/overview 2>&1)
+    http://localhost:8080/api/v1/dashboard/overview 2>&1)
 
 echo "Response:"
 echo $response2
@@ -47,7 +47,7 @@ echo "3. Testing with authentication header:"
 set token_response (curl -s -X POST \
     -H "Content-Type: application/json" \
     -d '{"identifier":"testadmin","password":"admin123"}' \
-    http://localhost:8080/api/auth/login)
+    http://localhost:8080/api/v1/auth/login)
 set token (echo $token_response | jq -r '.accessToken // empty')
 
 if test -n "$token"
@@ -56,7 +56,7 @@ if test -n "$token"
         -H "Authorization: Bearer $token" \
         --max-time 3 \
         -w "\n%{http_code}" \
-        http://localhost:8080/api/auth/login 2>&1)
+        http://localhost:8080/api/v1/auth/login 2>&1)
     echo "Response:"
     echo $response3
 else

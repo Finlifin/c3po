@@ -6,7 +6,7 @@ if (-not $Script:ConfigInitialized) {
 
     $baseUrl = $env:C3PO_API_BASE_URL
     if ([string]::IsNullOrWhiteSpace($baseUrl)) {
-        $baseUrl = "http://localhost:8080/api"
+        $baseUrl = "http://localhost:8080/api/v1"
     }
     $Script:ApiBaseUrl = $baseUrl
 

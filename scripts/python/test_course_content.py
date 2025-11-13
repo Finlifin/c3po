@@ -94,7 +94,7 @@ def course_content_create_course() -> None:
         log_warn("Skipping course creation (no teacher username)")
         return
 
-    log_info("Testing POST /api/courses as teacher")
+    log_info("Testing POST /api/v1/courses as teacher")
     suffix = f"{int(time.time())}{random.randint(100, 999)}"
     payload = {
         "name": f"Automated Course {suffix}",
@@ -127,7 +127,7 @@ def course_content_create_module() -> None:
         log_warn("Skipping module creation (no course id)")
         return
 
-    log_info(f"Testing POST /api/courses/{COURSE_CONTENT_COURSE_ID}/modules")
+    log_info(f"Testing POST /api/v1/courses/{COURSE_CONTENT_COURSE_ID}/modules")
     payload = {
         "title": "第 1 周 · 自动化测试章节",
         "displayOrder": 1,
@@ -158,7 +158,7 @@ def course_content_get_modules() -> None:
         log_warn("Skipping GET modules test (no course id)")
         return
 
-    log_info(f"Testing GET /api/courses/{COURSE_CONTENT_COURSE_ID}/modules")
+    log_info(f"Testing GET /api/v1/courses/{COURSE_CONTENT_COURSE_ID}/modules")
     body, status = http_get(f"/courses/{COURSE_CONTENT_COURSE_ID}/modules")
 
     if not assert_status("200", status, "List course modules"):

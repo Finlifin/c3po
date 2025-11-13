@@ -9,7 +9,7 @@ fi
 CREATED_ACTIVITY_ID=""
 
 test_activities_create() {
-  log_info "Testing POST /api/activities"
+  log_info "Testing POST /api/v1/activities"
 
   local timestamp
   timestamp="$(date +%s)"
@@ -36,7 +36,7 @@ test_activities_create() {
 }
 
 test_activities_list() {
-  log_info "Testing GET /api/activities"
+  log_info "Testing GET /api/v1/activities"
 
   local response
   response="$(http_get "/activities?page=1&limit=20")"
@@ -60,7 +60,7 @@ test_activities_get() {
     return 0
   fi
 
-  log_info "Testing GET /api/activities/$CREATED_ACTIVITY_ID"
+  log_info "Testing GET /api/v1/activities/$CREATED_ACTIVITY_ID"
 
   local response
   response="$(http_get "/activities/$CREATED_ACTIVITY_ID")"

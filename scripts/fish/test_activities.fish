@@ -6,7 +6,7 @@ source (dirname (status --current-filename))/lib.fish
 set -g CREATED_ACTIVITY_ID ""
 
 function test_activities_create
-    log_info "Testing POST /api/activities"
+    log_info "Testing POST /api/v1/activities"
     
     set -l timestamp (date +%s)
     set -l payload (printf '{"name":"Test Activity %s","description":"Test activity description","activityDate":"2024-12-31","location":"Test Location","capacity":50,"status":"upcoming"}' $timestamp)
@@ -35,7 +35,7 @@ function test_activities_create
 end
 
 function test_activities_list
-    log_info "Testing GET /api/activities"
+    log_info "Testing GET /api/v1/activities"
     
     set -l response (http_get "/activities?page=1&limit=20")
     set -l parsed (parse_response $response)
@@ -62,7 +62,7 @@ function test_activities_get
         return 0
     end
     
-    log_info "Testing GET /api/activities/$CREATED_ACTIVITY_ID"
+    log_info "Testing GET /api/v1/activities/$CREATED_ACTIVITY_ID"
     
     set -l response (http_get "/activities/$CREATED_ACTIVITY_ID")
     set -l parsed (parse_response $response)

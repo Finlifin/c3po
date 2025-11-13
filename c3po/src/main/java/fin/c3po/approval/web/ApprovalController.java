@@ -36,7 +36,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/admin/approvals")
+@RequestMapping("/api/v1/admin/approvals")
 @Validated
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")

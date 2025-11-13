@@ -14,8 +14,8 @@ echo "Health check response:"
 echo $health_response
 echo ""
 
-echo "2. Testing /api/auth/login endpoint..."
-echo "URL: $API_BASE/api/auth/login"
+echo "2. Testing /api/v1/auth/login endpoint..."
+echo "URL: $API_BASE/api/v1/auth/login"
 set login_payload '{"identifier":"admin","password":"admin123"}'
 echo "Payload: $login_payload"
 echo ""
@@ -23,10 +23,10 @@ echo "Response:"
 curl -v -X POST \
     -H "Content-Type: application/json" \
     -d "$login_payload" \
-    "$API_BASE/api/auth/login" 2>&1 | head -50
+    "$API_BASE/api/v1/auth/login" 2>&1 | head -50
 echo ""
 
-echo "3. Testing if /auth/login works (without /api prefix)..."
+echo "3. Testing if /auth/login works (legacy path)..."
 echo "URL: $API_BASE/auth/login"
 curl -v -X POST \
     -H "Content-Type: application/json" \
