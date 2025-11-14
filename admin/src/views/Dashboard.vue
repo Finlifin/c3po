@@ -2,6 +2,27 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import MainLayout from '../components/layout/MainLayout.vue'
+// 导入ECharts组件和配置
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart } from 'echarts/charts'
+import {
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent
+} from 'echarts/components'
+import VChart from 'vue-echarts'
+
+// 使用必要的组件
+use([
+  CanvasRenderer,
+  LineChart,
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent
+])
 
 const router = useRouter()
 
@@ -188,6 +209,101 @@ const confirmTask = () => {
   }
 }
 
+// 平台使用统计图表数据
+const platformUsageData = ref({
+  title: {
+    text: '平台使用率趋势（最近7天）',
+    left: 'center',
+    textStyle: {
+      fontSize: 16,
+      fontWeight: 'normal'
+    }
+  },
+  tooltip: {
+    trigger: 'axis',
+    formatter: function(params) {
+      let result = params[0].name + '<br/>';
+      params.forEach(item => {
+        result += item.marker + item.seriesName + ': ' + item.value + '%<br/>';
+      });
+      return result;
+    }
+  },
+  legend: {
+    data: ['活跃用户', '课程访问', '作业提交'],
+    bottom: 0
+  },
+  grid: {
+    left: '3%',
+    right: '4%',
+    bottom: '15%',
+    top: '15%',
+    containLabel: true
+  },
+  xAxis: {
+    type: 'category',
+    boundaryGap: false,
+    data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+  },
+  yAxis: {
+    type: 'value',
+    axisLabel: {
+      formatter: '{value}%'
+    },
+    max: 100
+  },
+  series: [
+    {
+      name: '活跃用户',
+      type: 'line',
+      stack: 'Total',
+      data: [65, 72, 78, 73, 79, 85, 82],
+      lineStyle: {
+        width: 3
+      },
+      itemStyle: {
+        color: '#007aff'
+      },
+      areaStyle: {
+        opacity: 0.2
+      },
+      smooth: true
+    },
+    {
+      name: '课程访问',
+      type: 'line',
+      stack: 'Total',
+      data: [52, 60, 68, 59, 65, 75, 70],
+      lineStyle: {
+        width: 3
+      },
+      itemStyle: {
+        color: '#34c759'
+      },
+      areaStyle: {
+        opacity: 0.2
+      },
+      smooth: true
+    },
+    {
+      name: '作业提交',
+      type: 'line',
+      stack: 'Total',
+      data: [40, 45, 42, 38, 48, 52, 49],
+      lineStyle: {
+        width: 3
+      },
+      itemStyle: {
+        color: '#ff9500'
+      },
+      areaStyle: {
+        opacity: 0.2
+      },
+      smooth: true
+    }
+  ]
+})
+
 // 数字动画效果
 onMounted(() => {
   const statNumbers = document.querySelectorAll('.stat-number')
@@ -282,11 +398,7 @@ onMounted(() => {
 
       <div class="chart-container">
         <h3 class="chart-title">平台使用统计</h3>
-        <div class="chart-placeholder">
-          📈 平台使用统计图表
-          <br>
-          <small>(实际项目中可集成Chart.js等图表库)</small>
-        </div>
+        <v-chart class="chart-content" :option="platformUsageData" autoresize />
       </div>
     </main>
 
@@ -553,22 +665,10 @@ onMounted(() => {
   text-align: center;
 }
 
-.chart-placeholder {
+.chart-content {
   height: 300px;
-  background: #f2f2f7;
+  width: 100%;
   border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #86868b;
-  border: 2px dashed #d1d1d6;
-  text-align: center;
-}
-
-.chart-placeholder small {
-  font-size: 12px;
-  margin-top: 8px;
 }
 
 /* 按钮样式 */

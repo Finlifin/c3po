@@ -1,6 +1,23 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import MainLayout from '../components/layout/MainLayout.vue'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart, BarChart, PieChart } from 'echarts/charts'
+import { TitleComponent, TooltipComponent, GridComponent, LegendComponent } from 'echarts/components'
+import VChart from 'vue-echarts'
+
+// 注册必要的组件
+use([
+  CanvasRenderer,
+  LineChart,
+  BarChart,
+  PieChart,
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent
+])
 
 // 过滤器选项
 const timeFilter = ref('最近7天')
@@ -21,6 +38,122 @@ const kpiData = ref([
     label: '提交作业'
   }
 ])
+
+// 图表数据
+const userGrowthData = {
+  xAxis: {
+    type: 'category',
+    data: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+  },
+  yAxis: {
+    type: 'value'
+  },
+  tooltip: {
+    trigger: 'axis'
+  },
+  series: [
+    {
+      data: [120, 200, 150, 300, 280, 400, 420, 500, 580, 650, 700, 780],
+      type: 'line',
+      smooth: true,
+      lineStyle: {
+        color: '#5856d6'
+      },
+      areaStyle: {
+        color: 'rgba(88, 86, 214, 0.1)'
+      }
+    }
+  ]
+}
+
+const userRoleData = {
+  tooltip: {
+    trigger: 'item'
+  },
+  legend: {
+    orient: 'vertical',
+    left: 'left'
+  },
+  series: [
+    {
+      data: [
+        { value: 4500, name: '学生' },
+        { value: 800, name: '教师' },
+        { value: 200, name: '管理员' },
+        { value: 500, name: '访客' }
+      ],
+      type: 'pie',
+      radius: '70%',
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      }
+    }
+  ]
+}
+
+const courseVisitData = {
+  tooltip: {
+    trigger: 'axis',
+    axisPointer: {
+      type: 'shadow'
+    }
+  },
+  grid: {
+    left: '3%',
+    right: '4%',
+    bottom: '3%',
+    containLabel: true
+  },
+  xAxis: {
+    type: 'value'
+  },
+  yAxis: {
+    type: 'category',
+    data: ['高等数学', '线性代数', '程序设计', '数据结构', '数据库', '计算机网络', '操作系统', '软件工程', '人工智能', '机器学习']
+  },
+  series: [
+    {
+      data: [3200, 2800, 2600, 2400, 2200, 2000, 1800, 1600, 1400, 1200],
+      type: 'bar',
+      itemStyle: {
+        color: function(params) {
+          const colors = ['#5856d6', '#007aff', '#34c759', '#ff9500', '#ff3b30', '#5ac8fa', '#ffcc00', '#af52de', '#ff2d55', '#00c7be']
+          return colors[params.dataIndex]
+        }
+      }
+    }
+  ]
+}
+
+const homeworkTrendData = {
+  xAxis: {
+    type: 'category',
+    data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+  },
+  yAxis: {
+    type: 'value'
+  },
+  tooltip: {
+    trigger: 'axis'
+  },
+  series: [
+    {
+      data: [120, 190, 130, 150, 220, 290, 260],
+      type: 'line',
+      smooth: true,
+      lineStyle: {
+        color: '#34c759'
+      },
+      areaStyle: {
+        color: 'rgba(52, 199, 89, 0.1)'
+      }
+    }
+  ]
+}
 
 // 应用过滤器
 const applyFilters = () => {
@@ -69,22 +202,22 @@ const applyFilters = () => {
       <section class="grid" style="grid-template-columns: 2fr 1fr; margin-top: 32px; gap: 24px;">
         <div class="chart">
           <div class="title">用户增长趋势</div>
-          <div class="placeholder">折线图占位</div>
+          <v-chart class="chart-container" :option="userGrowthData" autoresize />
         </div>
         <div class="chart">
           <div class="title">用户角色占比</div>
-          <div class="placeholder">饼图占位</div>
+          <v-chart class="chart-container" :option="userRoleData" autoresize />
         </div>
       </section>
 
       <section class="grid" style="grid-template-columns: 1fr 1fr; margin-top: 24px; gap: 24px;">
         <div class="chart">
           <div class="title">课程访问量 TOP10</div>
-          <div class="placeholder">柱状图占位</div>
+          <v-chart class="chart-container" :option="courseVisitData" autoresize />
         </div>
         <div class="chart">
           <div class="title">作业提交趋势</div>
-          <div class="placeholder">折线图占位</div>
+          <v-chart class="chart-container" :option="homeworkTrendData" autoresize />
         </div>
       </section>
     </main>
@@ -227,15 +360,20 @@ const applyFilters = () => {
 }
 
 .chart .placeholder {
-  height: 280px;
-  border: 2px dashed #d1d1d6;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #86868b;
-  font-size: 14px;
-}
+    height: 280px;
+    border: 2px dashed #d1d1d6;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #86868b;
+    font-size: 14px;
+  }
+
+  .chart-container {
+    height: 280px;
+    width: 100%;
+  }
 
 /* 响应式设计 */
 @media (max-width: 768px) {

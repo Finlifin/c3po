@@ -12,23 +12,19 @@ const Profile = () => import('../views/Profile.vue')
 
 // 检查是否已登录的函数
 const isAuthenticated = () => {
-  // 实际项目中应该检查localStorage或cookie中的token
-  return localStorage.getItem('token') !== null
+  // 检查localStorage中的token或admin_token
+  return localStorage.getItem('token') !== null || localStorage.getItem('admin_token') !== null
 }
 
 const routes = [
   {
     path: '/',
-    name: 'Login',
-    component: Login,
-    meta: {
-      requiresAuth: false
-    }
+    redirect: '/login'
   },
   {
-    path: '/home',
-    name: 'Home',
-    component: Home,
+    path: '/login',
+    name: 'Login',
+    component: Login,
     meta: {
       requiresAuth: false
     }
@@ -84,7 +80,7 @@ const routes = [
   // 捕获所有未匹配的路由，重定向到登录页
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/'
+    redirect: '/login'
   }
 ]
 
