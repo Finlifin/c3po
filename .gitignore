@@ -78,3 +78,10 @@ ehthumbs.db
 Icon?
 
 
+"__MACOSX/" 
+".DS_Store" 
+".DS_Store" 
+"node_modules/" 
+"dist/" 
+".vscode/" 
+"package-lock.json" 
