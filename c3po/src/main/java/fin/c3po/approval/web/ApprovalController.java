@@ -1,5 +1,7 @@
 package fin.c3po.approval.web;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fin.c3po.approval.ApprovalRequest;
 import fin.c3po.approval.ApprovalRequestRepository;
 import fin.c3po.approval.ApprovalStatus;
@@ -8,8 +10,10 @@ import fin.c3po.approval.dto.ApprovalDecisionRequest;
 import fin.c3po.approval.dto.ApprovalResponse;
 import fin.c3po.common.web.ApiResponse;
 import fin.c3po.common.web.PageMeta;
+import fin.c3po.course.Course;
+import fin.c3po.course.CourseRepository;
+import fin.c3po.course.CourseStatus;
 import fin.c3po.user.UserAccount;
-import fin.c3po.user.UserRole;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -32,7 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -45,6 +49,8 @@ public class ApprovalController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final ApprovalRequestRepository approvalRequestRepository;
+    private final CourseRepository courseRepository;
+    private final ObjectMapper objectMapper;
 
     @GetMapping
     public ApiResponse<List<ApprovalResponse>> listApprovals(
@@ -97,8 +103,45 @@ public class ApprovalController {
         approval.setProcessedBy(currentUser.getId());
         approval.setProcessedAt(Instant.now());
 
+        // Handle course publish approval
+        if (approval.getType() == ApprovalType.COURSE_PUBLISH) {
+            handleCoursePublishDecision(approval, request.getStatus());
+        }
+
         ApprovalRequest saved = approvalRequestRepository.save(approval);
         return ApiResponse.success(toResponse(saved));
+    }
+
+    private void handleCoursePublishDecision(ApprovalRequest approval, ApprovalStatus decisionStatus) {
+        if (approval.getPayload() == null || approval.getPayload().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course publish approval payload is missing");
+        }
+
+        UUID courseId;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = objectMapper.readValue(approval.getPayload(), Map.class);
+            Object courseIdObj = payload.get("courseId");
+            if (courseIdObj == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course ID not found in approval payload");
+            }
+            courseId = UUID.fromString(courseIdObj.toString());
+        } catch (JsonProcessingException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid approval payload format");
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid course ID format in payload");
+        }
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
+
+        if (decisionStatus == ApprovalStatus.APPROVED) {
+            course.setStatus(CourseStatus.PUBLISHED);
+        } else if (decisionStatus == ApprovalStatus.REJECTED) {
+            course.setStatus(CourseStatus.DRAFT);
+        }
+
+        courseRepository.save(course);
     }
 
     private ApprovalResponse toResponse(ApprovalRequest approval) {
@@ -116,4 +159,3 @@ public class ApprovalController {
                 .build();
     }
 }
-
