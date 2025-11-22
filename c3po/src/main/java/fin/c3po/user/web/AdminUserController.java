@@ -10,6 +10,7 @@ import fin.c3po.user.UserAccount;
 import fin.c3po.user.UserAccountRepository;
 import fin.c3po.user.UserRole;
 import fin.c3po.user.UserStatus;
+import fin.c3po.user.dto.AdminUpdateUserRequest;
 import fin.c3po.user.dto.AdminUserResponse;
 import fin.c3po.user.dto.BulkCreateUsersRequest;
 import fin.c3po.user.dto.BulkCreateUsersResponse;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -215,6 +217,64 @@ public class AdminUserController {
         user.setStatus(request.getStatus());
         user.setStatusReason(reason);
         userAccountRepository.save(user);
+
+        StudentProfile studentProfile = studentProfileRepository.findByUserId(userId).orElse(null);
+        TeacherProfile teacherProfile = teacherProfileRepository.findByUserId(userId).orElse(null);
+
+        return ApiResponse.success(toResponse(user, studentProfile, teacherProfile));
+    }
+
+    @PatchMapping("/{userId}")
+    @Transactional
+    public ApiResponse<AdminUserResponse> updateUser(
+            @PathVariable UUID userId,
+            @Valid @RequestBody AdminUpdateUserRequest request) {
+
+        UserAccount user = userAccountRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        boolean updated = false;
+
+        // Update username if provided
+        if (StringUtils.hasText(request.getUsername())) {
+            String newUsername = request.getUsername().trim().toLowerCase(Locale.ROOT);
+            if (!newUsername.equals(user.getUsername())) {
+                if (userAccountRepository.existsByUsernameIgnoreCase(newUsername)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
+                }
+                user.setUsername(newUsername);
+                updated = true;
+            }
+        }
+
+        // Update email if provided
+        if (StringUtils.hasText(request.getEmail())) {
+            String newEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
+            if (!newEmail.equals(user.getEmail())) {
+                if (userAccountRepository.existsByEmailIgnoreCase(newEmail)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+                }
+                user.setEmail(newEmail);
+                updated = true;
+            }
+        }
+
+        // Update status if provided
+        if (request.getStatus() != null) {
+            String reason = normalizeReason(request.getStatusReason());
+            if (request.getStatus() != UserStatus.ACTIVE && !StringUtils.hasText(reason)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reason is required when status is not ACTIVE");
+            }
+            if (request.getStatus() != user.getStatus()) {
+                user.setStatus(request.getStatus());
+                user.setStatusReason(reason);
+                updated = true;
+            }
+        }
+
+        if (updated) {
+            user = userAccountRepository.save(user);
+        }
 
         StudentProfile studentProfile = studentProfileRepository.findByUserId(userId).orElse(null);
         TeacherProfile teacherProfile = teacherProfileRepository.findByUserId(userId).orElse(null);

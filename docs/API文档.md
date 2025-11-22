@@ -195,6 +195,45 @@
   - 管理员角色（`ADMIN`）的两个 profile 字段均为 `null`。
 - **异常**：`401`（未认证）。
 
+#### PATCH `/api/v1/users/me`
+- **角色**：已认证用户
+- **描述**：更新当前登录用户的基本信息（用户名、邮箱）。所有字段均为可选，只更新提供的字段。
+- **请求体示例**
+```json
+{
+  "username": "newusername",
+  "email": "newemail@example.com"
+}
+```
+- **响应示例**：与 `GET /api/v1/users/me` 相同，返回更新后的完整用户信息。
+- **校验约束**：
+  - `username`：3-64 个字符，不能与现有用户名冲突
+  - `email`：必须为有效邮箱格式，不能与现有邮箱冲突
+- **异常**：
+  - `400`：字段验证失败
+  - `401`：未认证
+  - `409`：用户名或邮箱已存在
+
+#### PATCH `/api/v1/users/me/password`
+- **角色**：已认证用户
+- **描述**：修改当前登录用户的密码。需要提供当前密码以验证身份。
+- **请求体**
+```json
+{
+  "currentPassword": "OldPassword123!",
+  "newPassword": "NewPassword123!",
+  "confirmPassword": "NewPassword123!"
+}
+```
+- **校验约束**：
+  - `currentPassword`：必填，用于验证身份
+  - `newPassword`：必填，至少 8 个字符
+  - `confirmPassword`：必填，必须与新密码一致
+- **响应**：成功返回空响应（`data` 为 `null`）。
+- **异常**：
+  - `400`：新密码与确认密码不匹配，或字段验证失败
+  - `401`：当前密码不正确或未认证
+
 #### GET `/api/v1/users/me/preferences`
 - **角色**：已认证用户
 - **描述**：获取当前登录用户的偏好设置（通知偏好、隐私设置、语言等）。
@@ -376,6 +415,29 @@
   - 同一请求中用户名/邮箱不能重复，且不得与已存在账号冲突。
   - `status` 非 `ACTIVE` 时必须提供 `statusReason`。
   - `role=STUDENT` 只能携带 `studentProfile`；`role=TEACHER` 只能携带 `teacherProfile`；`role=ADMIN` 不能携带档案信息。
+
+#### PATCH `/api/v1/admin/users/{userId}`
+- **角色**：管理员
+- **描述**：更新指定用户的基本信息（用户名、邮箱、状态）。所有字段均为可选，只更新提供的字段。
+- **请求体示例**
+  ```json
+  {
+    "username": "newusername",
+    "email": "newemail@example.com",
+    "status": "DISABLED",
+    "statusReason": "违反平台使用规范，已停用"
+  }
+  ```
+- **响应示例**：与 `GET /api/v1/admin/users` 列表项结构相同，返回更新后的完整用户信息。
+- **校验约束**：
+  - `username`：3-64 个字符，不能与现有用户名冲突
+  - `email`：必须为有效邮箱格式，不能与现有邮箱冲突
+  - `status`：如果设置为非 `ACTIVE`，必须提供 `statusReason`
+- **异常**
+  - `400`：字段验证失败，或 `status` 非 `ACTIVE` 但未提供 `reason`
+  - `404`：用户不存在
+  - `403`：非管理员访问
+  - `409`：用户名或邮箱已存在
 
 #### PUT `/api/v1/admin/users/{userId}/status`
 - **角色**：管理员
