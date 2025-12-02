@@ -38,6 +38,126 @@ const showMessage = (text, type = 'success') => {
   }, 3000)
 }
 
+// 密码修改表单
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+// 密码修改加载状态
+const changingPassword = ref(false)
+
+// 表单验证错误
+const passwordErrors = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+// 重置表单错误
+const resetPasswordErrors = () => {
+  passwordErrors.currentPassword = ''
+  passwordErrors.newPassword = ''
+  passwordErrors.confirmPassword = ''
+}
+
+// 表单验证
+const validatePasswordForm = () => {
+  resetPasswordErrors()
+  let isValid = true
+
+  // 验证当前密码
+  if (!passwordForm.currentPassword) {
+    passwordErrors.currentPassword = '请输入当前密码'
+    isValid = false
+  }
+
+  // 验证新密码
+  if (!passwordForm.newPassword) {
+    passwordErrors.newPassword = '请输入新密码'
+    isValid = false
+  } else if (passwordForm.newPassword.length < 8) {
+    passwordErrors.newPassword = '新密码长度至少为8个字符'
+    isValid = false
+  } else if (!/[a-zA-Z]/.test(passwordForm.newPassword) || !/[0-9]/.test(passwordForm.newPassword)) {
+    passwordErrors.newPassword = '新密码必须包含字母和数字'
+    isValid = false
+  }
+
+  // 验证确认密码
+  if (!passwordForm.confirmPassword) {
+    passwordErrors.confirmPassword = '请确认新密码'
+    isValid = false
+  } else if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    passwordErrors.confirmPassword = '两次输入的密码不一致'
+    isValid = false
+  }
+
+  return isValid
+}
+
+// 修改密码
+const changePassword = async () => {
+  // 验证表单
+  if (!validatePasswordForm()) {
+    return
+  }
+
+  changingPassword.value = true
+  try {
+    // 构建请求数据
+    const requestData = {
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword,
+      confirmPassword: passwordForm.confirmPassword
+    }
+
+    // 调用API
+    const response = await authAPI.changePassword(requestData)
+    
+    // 成功处理
+    showMessage('密码修改成功', 'success')
+    
+    // 重置表单
+    passwordForm.currentPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+    resetPasswordErrors()
+    
+  } catch (err) {
+    console.error('修改密码失败:', err)
+    
+    // 错误处理
+    if (err.response && err.response.data) {
+      const errorData = err.response.data
+      
+      // 根据后端返回的错误信息设置对应的错误提示
+      if (errorData.currentPassword) {
+        passwordErrors.currentPassword = errorData.currentPassword
+      }
+      if (errorData.newPassword) {
+        passwordErrors.newPassword = errorData.newPassword
+      }
+      if (errorData.confirmPassword) {
+        passwordErrors.confirmPassword = errorData.confirmPassword
+      }
+      
+      // 如果有全局错误消息，显示出来
+      if (errorData.message) {
+        showMessage(errorData.message, 'error')
+      }
+    }
+    
+    // 如果没有具体的字段错误，显示通用错误消息
+    if (!Object.values(passwordErrors).some(error => error)) {
+      showMessage('修改密码失败，请稍后重试', 'error')
+    }
+  } finally {
+    changingPassword.value = false
+  }
+}
+
 // 格式化日期时间
 const formatDateTime = (instant) => {
   if (!instant) return '--'
@@ -279,13 +399,48 @@ onMounted(async () => {
           </div>
         </div>
 
-        <!-- 密码修改提示 -->
+        <!-- 密码修改表单 -->
         <div class="card">
           <div class="card-header">
             <div class="card-title">密码管理</div>
           </div>
+          <div class="form-row">
+            <label class="form-label">当前密码</label>
+            <input 
+              v-model="passwordForm.currentPassword"
+              class="form-input"
+              type="password"
+              placeholder="请输入当前密码"
+            >
+            <div v-if="passwordErrors.currentPassword" class="error-message">{{ passwordErrors.currentPassword }}</div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">新密码</label>
+            <input 
+              v-model="passwordForm.newPassword"
+              class="form-input"
+              type="password"
+              placeholder="请输入新密码"
+            >
+            <div v-if="passwordErrors.newPassword" class="error-message">{{ passwordErrors.newPassword }}</div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">确认新密码</label>
+            <input 
+              v-model="passwordForm.confirmPassword"
+              class="form-input"
+              type="password"
+              placeholder="请再次输入新密码"
+            >
+            <div v-if="passwordErrors.confirmPassword" class="error-message">{{ passwordErrors.confirmPassword }}</div>
+          </div>
           <div class="form-hint">
-            <p>注意：后端暂未提供修改密码的接口。如需修改密码，请联系管理员。</p>
+            <p>密码要求：长度至少8个字符，包含字母和数字。</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" @click="changePassword" :disabled="changingPassword">
+              {{ changingPassword ? '修改中...' : '修改密码' }}
+            </button>
           </div>
         </div>
       </div>
@@ -482,6 +637,14 @@ onMounted(async () => {
 .form-hint p {
   margin: 0;
   line-height: 1.5;
+}
+
+.error-message {
+  grid-column: 2;
+  color: #ff3b30;
+  font-size: 12px;
+  margin-top: -8px;
+  margin-bottom: 8px;
 }
 
 .loading-container {

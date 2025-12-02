@@ -11,7 +11,9 @@ export const authAPI = {
   // 登出
   logout: () => http.post('/auth/logout'),
   // 刷新token
-  refreshToken: () => http.post('/auth/refresh')
+  refreshToken: () => http.post('/auth/refresh'),
+  // 修改密码
+  changePassword: (passwordData) => http.patch('/users/me/password', passwordData)
 };
 
 // 用户偏好设置API
@@ -31,7 +33,7 @@ export const userAPI = {
   // 创建用户
   createUser: (userData) => http.post('/admin/users', userData),
   // 更新用户信息
-  updateUser: (id, userData) => http.put(`/admin/users/${id}`, userData),
+  updateUser: (id, userData) => http.patch(`/admin/users/${id}`, userData),
   // 删除用户
   deleteUser: (id) => http.delete(`/admin/users/${id}`),
   // 更新用户状态
@@ -96,8 +98,8 @@ export const activityAPI = {
 
 // 仪表盘统计API
 export const dashboardAPI = {
-  // 获取仪表盘统计数据
-  getDashboardStats: () => http.get('/dashboard/overview'),
+  // 获取仪表盘统计数据（管理员指标）
+  getDashboardStats: () => http.get('/admin/metrics'),
   // 获取最近活动
   getRecentActivities: () => http.get('/dashboard/overview'),
   // 获取待处理任务

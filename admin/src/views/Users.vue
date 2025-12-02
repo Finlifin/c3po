@@ -1,8 +1,11 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import MainLayout from '../components/layout/MainLayout.vue'
 import { userAPI } from '../services/api'
 import { mockAPI } from '../services/mockData'
+
+const router = useRouter()
 
 // 状态
 const users = ref([])
@@ -201,18 +204,287 @@ const closeEditModal = () => {
   }
 }
 
+// 统一错误处理函数
+const handleApiError = (err, operationName = '操作') => {
+  console.error(`${operationName}失败:`, err)
+  let errorMessage = `${operationName}失败`
+  
+  if (err?.error?.message) {
+    errorMessage = err.error.message
+  } else if (err?.message) {
+    errorMessage = err.message
+  }
+  
+  // 特别处理不同类型的错误
+  if (err?.error?.includes('Unauthorized') || errorMessage.includes('Unauthorized')) {
+    errorMessage = '认证失败，请重新登录！'
+    router.push({ name: 'Login' })
+  } else if (err?.status === 403) {
+    errorMessage = '权限不足，只有管理员可以执行此操作'
+  } else if (err?.status === 400) {
+    errorMessage = '请求参数错误，请检查输入信息'
+  } else if (err?.status === 404) {
+    errorMessage = '请求的资源不存在'
+  } else if (err?.status === 409) {
+    errorMessage = '数据冲突，请检查输入信息是否已存在'
+  } else if (err?.status >= 500) {
+    errorMessage = '服务器内部错误，请稍后重试'
+  }
+  
+  alert(errorMessage)
+  return errorMessage
+}
+
+// 表单验证函数
+const validateUserForm = (form) => {
+  // 用户名验证
+  if (!form.username.trim()) {
+    alert('用户名不能为空')
+    return false
+  }
+  
+  if (form.username.trim().length < 3 || form.username.trim().length > 50) {
+    alert('用户名长度必须在3-50个字符之间')
+    return false
+  }
+  
+  // 邮箱验证
+  if (!form.email.trim()) {
+    alert('邮箱不能为空')
+    return false
+  }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(form.email)) {
+    alert('请输入有效的邮箱地址')
+    return false
+  }
+  
+  return true
+}
+
 // 保存编辑
 const saveEdit = async () => {
-  if (!currentUser.value) return
+  if (!currentUser.value || !editForm.value) return
   
   try {
-    // 注意：后端目前没有通用的更新用户信息接口
-    // 只能通过批量创建接口或直接修改数据库
-    // 这里先提示用户
-    alert('后端暂未提供更新用户信息的接口。\n\n当前只能修改用户状态。\n如需修改用户信息，请联系后端开发人员添加 PUT /api/v1/admin/users/{userId} 接口。')
+    // 验证表单
+    if (!validateUserForm(editForm.value)) {
+      return
+    }
+    
+    // 构建请求数据
+    const userData = {
+      username: editForm.value.username.trim(),
+      email: editForm.value.email.trim()
+    }
+    
+    // 可选：如果有其他字段也需要更新
+    if (editForm.value.status && editForm.value.status !== currentUser.value.status) {
+      userData.status = editForm.value.status
+      if (editForm.value.status !== 'ACTIVE' && editForm.value.statusReason) {
+        userData.statusReason = editForm.value.statusReason.trim()
+      }
+    }
+    
+    // 调用API
+    await userAPI.updateUser(currentUser.value.id, userData)
+    
+    // 成功处理
+    alert('用户信息更新成功！')
     closeEditModal()
+    
+    // 刷新用户列表
+    await fetchUsers()
   } catch (err) {
-    alert('保存失败: ' + (err.message || '未知错误'))
+    handleApiError(err, '更新用户信息')
+  }
+}
+
+// 创建用户相关状态
+const createUserModalVisible = ref(false)
+const isSubmittingCreateUser = ref(false)
+const createUserForm = reactive({
+  username: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+  role: 'STUDENT',
+  status: 'ACTIVE',
+  studentNo: '',
+  grade: '',
+  major: '',
+  className: '',
+  teacherNo: '',
+  department: '',
+  title: '',
+  subjects: ''
+})
+const createUserFormErrors = reactive({})
+
+// 重置创建用户表单
+const resetCreateUserForm = () => {
+  createUserForm.username = ''
+  createUserForm.email = ''
+  createUserForm.password = ''
+  createUserForm.confirmPassword = ''
+  createUserForm.role = 'STUDENT'
+  createUserForm.status = 'ACTIVE'
+  createUserForm.studentNo = ''
+  createUserForm.grade = ''
+  createUserForm.major = ''
+  createUserForm.className = ''
+  createUserForm.teacherNo = ''
+  createUserForm.department = ''
+  createUserForm.title = ''
+  createUserForm.subjects = ''
+  
+  // 清空错误信息
+  Object.keys(createUserFormErrors).forEach(key => {
+    delete createUserFormErrors[key]
+  })
+}
+
+const openCreateUserModal = () => {
+  resetCreateUserForm()
+  createUserModalVisible.value = true
+}
+
+const closeCreateUserModal = () => {
+  createUserModalVisible.value = false
+  resetCreateUserForm()
+}
+
+// 表单验证函数
+const validateCreateUserForm = () => {
+  const errors = {}
+  
+  // 验证用户名
+  if (!createUserForm.username.trim()) {
+    errors.username = '用户名不能为空'
+  } else if (createUserForm.username.length > 64) {
+    errors.username = '用户名长度不能超过64个字符'
+  }
+  
+  // 验证邮箱
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!createUserForm.email.trim()) {
+    errors.email = '邮箱不能为空'
+  } else if (!emailRegex.test(createUserForm.email)) {
+    errors.email = '请输入有效的邮箱地址'
+  } else if (createUserForm.email.length > 128) {
+    errors.email = '邮箱长度不能超过128个字符'
+  }
+  
+  // 验证密码
+  if (!createUserForm.password) {
+    errors.password = '密码不能为空'
+  } else if (createUserForm.password.length < 8) {
+    errors.password = '密码长度至少为8个字符'
+  } else if (createUserForm.password.length > 128) {
+    errors.password = '密码长度不能超过128个字符'
+  }
+  
+  // 验证确认密码
+  if (createUserForm.password !== createUserForm.confirmPassword) {
+    errors.confirmPassword = '两次输入的密码不一致'
+  }
+  
+  // 验证角色特定字段
+  if (createUserForm.role === 'STUDENT' && !createUserForm.studentNo.trim()) {
+    errors.studentNo = '学号不能为空'
+  }
+  
+  if (createUserForm.role === 'TEACHER' && !createUserForm.teacherNo.trim()) {
+    errors.teacherNo = '工号不能为空'
+  }
+  
+  // 清空并填充错误信息
+  Object.keys(createUserFormErrors).forEach(key => {
+    delete createUserFormErrors[key]
+  })
+  Object.assign(createUserFormErrors, errors)
+  return Object.keys(errors).length === 0
+}
+
+// 创建用户函数
+const createUser = async () => {
+  // 验证表单
+  if (!validateCreateUserForm()) {
+    return
+  }
+  
+  try {
+    isSubmittingCreateUser.value = true
+    
+    // 检查token是否存在
+    const token = localStorage.getItem('token')
+    if (!token) {
+      alert('请先登录！')
+      router.push({ name: 'Login' })
+      return
+    }
+    
+    // 构建请求数据
+    const userPayload = {
+      username: createUserForm.username.trim(),
+      email: createUserForm.email.trim(),
+      password: createUserForm.password,
+      role: createUserForm.role,
+      status: createUserForm.status
+    }
+    
+    // 添加角色特定信息
+    if (createUserForm.role === 'STUDENT') {
+      userPayload.studentProfile = {
+        studentNo: createUserForm.studentNo.trim(),
+        grade: createUserForm.grade.trim() || undefined,
+        major: createUserForm.major.trim() || undefined,
+        className: createUserForm.className.trim() || undefined
+      }
+    } else if (createUserForm.role === 'TEACHER') {
+      userPayload.teacherProfile = {
+        teacherNo: createUserForm.teacherNo.trim(),
+        department: createUserForm.department.trim() || undefined,
+        title: createUserForm.title.trim() || undefined,
+        subjects: createUserForm.subjects.trim() 
+          ? createUserForm.subjects.split(',').map(s => s.trim()).filter(s => s) 
+          : []
+      }
+    }
+    
+    // 构建批量创建请求
+    const requestData = {
+      users: [userPayload]
+    }
+    
+    // 调用API
+    console.log('发送创建用户请求:', requestData)
+    await userAPI.createUser(requestData)
+    
+    // 成功处理
+    alert('用户创建成功！')
+    closeCreateUserModal()
+    
+    // 刷新用户列表
+    await fetchUsers()
+  } catch (error) {
+    console.error('创建用户失败:', error)
+    // 处理错误信息
+    let errorMessage = '创建用户失败'
+    if (error?.error?.message) {
+      errorMessage = error.error.message
+    } else if (error?.message) {
+      errorMessage = error.message
+    }
+    // 特别处理认证错误
+    if (error?.error?.includes('Unauthorized') || errorMessage.includes('Unauthorized')) {
+      errorMessage = '认证失败，请重新登录！'
+      router.push({ name: 'Login' })
+    }
+    alert(errorMessage)
+  } finally {
+    isSubmittingCreateUser.value = false
   }
 }
 
@@ -366,28 +638,70 @@ const toggleUserStatus = async (userId) => {
   }
 }
 
-const changeUserStatus = async (userId, backendStatus, reason) => {
-  // 确保 userId 是字符串格式
-  const userIdStr = String(userId)
-  console.log('更新用户状态 - userId:', userIdStr, 'status:', backendStatus)
-  
-  if (useMock.value) {
-    await mockAPI.updateUser(userIdStr, { status: backendStatusToUi(backendStatus) })
-  } else {
-    const payload = { status: backendStatus }
-    if (reason) {
-      payload.reason = reason
+// 用户状态更新核心函数
+const changeUserStatus = async (userId, backendStatus, reason = '') => {
+  try {
+    // 确保 userId 是字符串格式
+    const userIdStr = String(userId)
+    console.log('更新用户状态 - userId:', userIdStr, 'status:', backendStatus)
+    
+    // 验证状态值是否有效
+    const validStatuses = ['ACTIVE', 'INACTIVE', 'PENDING']
+    if (!validStatuses.includes(backendStatus)) {
+      alert(`无效的状态值: ${backendStatus}，请使用 ${validStatuses.join('、')}`)
+      return false
     }
-    try {
+    
+    // 验证非ACTIVE状态必须提供原因
+    if (backendStatus !== 'ACTIVE') {
+      if (!reason.trim()) {
+        alert('非激活状态必须提供状态变更原因')
+        return false
+      }
+      
+      // 验证原因长度
+      if (reason.trim().length < 5 || reason.trim().length > 200) {
+        alert('状态变更原因长度必须在5-200个字符之间')
+        return false
+      }
+    }
+    
+    const payload = {
+      status: backendStatus,
+      statusReason: backendStatus !== 'ACTIVE' ? reason.trim() : undefined
+    }
+    
+    // 确认操作
+    const statusText = {
+      ACTIVE: '激活',
+      INACTIVE: '停用',
+      PENDING: '待审核'
+    }
+    
+    if (!confirm(`确定要将用户状态更新为「${statusText[backendStatus]}」吗？${backendStatus !== 'ACTIVE' ? `\n原因：${reason}` : ''}`)) {
+      return false
+    }
+    
+    if (useMock.value) {
+      await mockAPI.updateUser(userIdStr, { status: backendStatusToUi(backendStatus) })
+    } else {
+      // 调用正确的接口：PUT /api/v1/admin/users/{userId}/status
       await userAPI.updateUserStatus(userIdStr, payload)
       // 更新成功后刷新列表
       await fetchUsers()
-    } catch (err) {
-      console.error('更新用户状态失败:', err)
-      throw err
     }
+    
+    // 更新本地状态
+    setUserStatusLocal(userIdStr, backendStatusToUi(backendStatus), reason.trim())
+    
+    // 显示成功消息
+    console.log(`用户 ${userIdStr} 状态已更新为 ${statusText[backendStatus]}`)
+    
+    return true
+  } catch (err) {
+    handleApiError(err, '更新用户状态')
+    return false
   }
-  setUserStatusLocal(userIdStr, backendStatusToUi(backendStatus))
 }
 
 // 搜索
@@ -440,6 +754,35 @@ onMounted(() => {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    
+    /* 创建用户相关样式 */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .role-specific-info {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    .role-specific-info h3 {
+      margin-bottom: 16px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .error-text {
+      color: #c62828;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    
+    .form-input.error {
+      border-color: #c62828;
+    }
   </style>
 
 <template>
@@ -448,15 +791,18 @@ onMounted(() => {
       <header class="page-header">
         <div class="header-content">
           <h1 class="page-title">用户管理</h1>
-          <div class="search-bar">
-            <input 
-              type="text" 
-              class="search-input" 
-              placeholder="搜索用户..."
-              v-model="searchQuery"
-              @input="handleSearch"
-            >
-            <button class="btn btn-primary" @click="handleSearch">搜索</button>
+          <div class="header-actions">
+            <button class="btn btn-success" @click="openCreateUserModal">创建用户</button>
+            <div class="search-bar">
+              <input 
+                type="text" 
+                class="search-input" 
+                placeholder="搜索用户..."
+                v-model="searchQuery"
+                @input="handleSearch"
+              >
+              <button class="btn btn-primary" @click="handleSearch">搜索</button>
+            </div>
           </div>
         </div>
       </header>
@@ -654,8 +1000,6 @@ onMounted(() => {
                 type="text" 
                 class="form-input" 
                 v-model="editForm.username"
-                :readonly="true"
-                title="用户名暂不支持修改"
               >
             </div>
             <div class="form-group">
@@ -664,8 +1008,6 @@ onMounted(() => {
                 type="email" 
                 class="form-input" 
                 v-model="editForm.email"
-                :readonly="true"
-                title="邮箱暂不支持修改"
               >
             </div>
           </div>
@@ -738,8 +1080,8 @@ onMounted(() => {
           </div>
           
           <div class="info-notice">
-            <p>⚠️ 注意：后端暂未提供更新用户详细信息的接口。</p>
-            <p>当前只能修改用户状态。如需修改其他信息，请联系后端开发人员添加相应的接口。</p>
+            <p>📝 提示：可以修改用户名和邮箱信息。</p>
+            <p>修改状态时，非激活状态需要提供状态变更原因。</p>
           </div>
         </div>
         
@@ -750,11 +1092,196 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- 创建用户模态框 -->
+    <div v-if="createUserModalVisible" class="modal active" @click.self="closeCreateUserModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2 class="modal-title">创建用户</h2>
+          <button class="modal-close" @click="closeCreateUserModal">&times;</button>
+        </div>
+        
+        <div class="user-create-form">
+          <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">用户名 *</label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.username"
+                  :class="{ 'error': createUserFormErrors.username }"
+                >
+                <div v-if="createUserFormErrors.username" class="error-message">{{ createUserFormErrors.username }}</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">邮箱 *</label>
+                <input 
+                  type="email" 
+                  class="form-input" 
+                  v-model="createUserForm.email"
+                  :class="{ 'error': createUserFormErrors.email }"
+                >
+                <div v-if="createUserFormErrors.email" class="error-message">{{ createUserFormErrors.email }}</div>
+              </div>
+            </div>
+          
+          <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">密码 *</label>
+                <input 
+                  type="password" 
+                  class="form-input" 
+                  v-model="createUserForm.password"
+                  :class="{ 'error': createUserFormErrors.password }"
+                  placeholder="至少8个字符"
+                >
+                <div v-if="createUserFormErrors.password" class="error-message">{{ createUserFormErrors.password }}</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">确认密码 *</label>
+                <input 
+                  type="password" 
+                  class="form-input" 
+                  v-model="createUserForm.confirmPassword"
+                  :class="{ 'error': createUserFormErrors.confirmPassword }"
+                >
+                <div v-if="createUserFormErrors.confirmPassword" class="error-message">{{ createUserFormErrors.confirmPassword }}</div>
+              </div>
+            </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">角色 *</label>
+              <select 
+                class="form-input" 
+                v-model="createUserForm.role"
+                :class="{ 'error': createUserFormErrors.role }"
+              >
+                <option value="STUDENT">学生</option>
+                <option value="TEACHER">教师</option>
+                <option value="ADMIN">管理员</option>
+              </select>
+              <div v-if="createUserFormErrors.role" class="error-text">{{ createUserFormErrors.role }}</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">状态</label>
+              <select 
+                class="form-input" 
+                v-model="createUserForm.status"
+              >
+                <option value="ACTIVE">已激活</option>
+                <option value="PENDING">待审核</option>
+                <option value="SUSPENDED">已禁用</option>
+              </select>
+            </div>
+          </div>
+          
+          <!-- 学生信息 -->
+          <div v-if="createUserForm.role === 'STUDENT'" class="role-specific-info">
+            <h3>学生信息</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">学号 <span class="required">*</span></label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.studentNo"
+                  :class="{ 'error': createUserFormErrors.studentNo }"
+                >
+                <div v-if="createUserFormErrors.studentNo" class="error-message">{{ createUserFormErrors.studentNo }}</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">年级</label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.grade"
+                >
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">专业</label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.major"
+                >
+              </div>
+              <div class="form-group">
+                <label class="form-label">班级</label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.className"
+                >
+              </div>
+            </div>
+          </div>
+          
+          <!-- 教师信息 -->
+          <div v-else-if="createUserForm.role === 'TEACHER'" class="role-specific-info">
+            <h3>教师信息</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">工号 <span class="required">*</span></label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.teacherNo"
+                  :class="{ 'error': createUserFormErrors.teacherNo }"
+                >
+                <div v-if="createUserFormErrors.teacherNo" class="error-message">{{ createUserFormErrors.teacherNo }}</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">部门</label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.department"
+                >
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">职称</label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.title"
+                >
+              </div>
+              <div class="form-group">
+                <label class="form-label">教授科目（多个科目用逗号分隔）</label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  v-model="createUserForm.subjects"
+                  placeholder="如：数学,英语,物理"
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" @click="closeCreateUserModal">取消</button>
+          <button 
+            type="button" 
+            class="btn btn-primary" 
+            @click="createUser"
+            :disabled="isSubmittingCreateUser"
+          >
+            {{ isSubmittingCreateUser ? '创建中...' : '创建' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 用户详情模态框 -->
-      <div v-if="userModalVisible" class="modal active" @click.self="closeUserModal">
-        <div class="modal-content" @click.stop>
-          <div class="modal-header">
-            <h2 class="modal-title">用户详情</h2>
+    <div v-if="userModalVisible" class="modal active" @click.self="closeUserModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2 class="modal-title">用户详情</h2>
           <button class="modal-close" @click="closeUserModal">&times;</button>
         </div>
         
@@ -1080,14 +1607,36 @@ onMounted(() => {
 }
 
 .modal-content {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 32px;
-  width: 90%;
-  max-width: 520px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 32px;
+    width: 90%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  .required {
+    color: #ff4d4f;
+    margin-left: 4px;
+  }
+  
+  .error-message {
+    color: #ff4d4f;
+    font-size: 12px;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+  
+  .form-input.error {
+    border-color: #ff4d4f;
+    box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+  }
+  
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 
 .modal-header {
   display: flex;

@@ -28,7 +28,7 @@ const refreshCode = () => {
   currentCode.value = generateVerificationCode()
 }
 
-// 已移除返回首页功能
+
 
 const handleLogin = async () => {
   // 简单的表单验证
@@ -177,6 +177,8 @@ const handleLogin = async () => {
   justify-content: center;
   position: relative;
 }
+
+
 
 .login-container {
   background: #ffffff;
@@ -359,7 +361,12 @@ const handleLogin = async () => {
   .login-container {
     padding: 24px 20px;
   }
-
+  
+  .back-link {
+    top: 16px;
+    left: 16px;
+  }
+  
   .login-title {
     font-size: 20px;
   }

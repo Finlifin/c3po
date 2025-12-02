@@ -64,8 +64,13 @@ const fetchDashboardData = async () => {
       applyMockActivities(activitiesResponse)
       applyMockTasks(tasksResponse)
     } else {
-      const overviewResponse = await dashboardAPI.getDashboardStats()
-      applyOverviewData(overviewResponse || {})
+      // 调用管理员指标接口
+      const response = await dashboardAPI.getDashboardStats()
+      // 后端返回的是 ApiResponse 格式，http 拦截器已返回 response.data
+      // 如果 response 有 data 字段，说明是 ApiResponse 格式，否则直接使用 response
+      const metricsData = response?.data || response || {}
+      console.log('获取到的仪表盘数据:', metricsData)
+      applyAdminMetricsData(metricsData)
     }
   } catch (err) {
     console.error('获取仪表盘数据失败:', err)
@@ -200,7 +205,7 @@ const confirmTask = () => {
         router.push('/admin/courses')
         break
       case 'approval':
-        // 跳转到课程审核页面
+        // 跳转到课程管理页面
         closeModal()
         router.push('/admin/courses')
         break
@@ -421,69 +426,94 @@ const applyMockTasks = (tasksResponse) => {
   })
 }
 
-const applyOverviewData = (overview) => {
+// 应用管理员指标数据
+const applyAdminMetricsData = (metrics) => {
   const {
-    totalMembers = 0,
-    activeMembers = 0,
-    totalActivities = 0,
-    pendingApplications = 0,
-    approvalRate = 0
-  } = overview
+    totalUsers = 0,
+    totalCourses = 0,
+    activeCourses = 0,
+    totalAssignments = 0,
+    pendingApprovals = 0
+  } = metrics
 
+  // 更新统计卡片数据
   statistics.value = [
-    { label: '总成员数', value: formatNumber(totalMembers), class: 'users' },
-    { label: '活跃成员', value: formatNumber(activeMembers), class: 'active' },
-    { label: '活动总数', value: formatNumber(totalActivities), class: 'courses' },
-    { label: '待审批申请', value: formatNumber(pendingApplications), class: 'teachers' }
+    { label: '总用户数', value: formatNumber(totalUsers), class: 'users' },
+    { label: '课程总数', value: formatNumber(totalCourses), class: 'courses' },
+    { label: '活跃课程', value: formatNumber(activeCourses), class: 'active' },
+    { label: '作业总数', value: formatNumber(totalAssignments), class: 'teachers' }
   ]
 
+  // 更新最近活动数据
   recentActivities.value = [
     {
-      icon: 'course',
-      title: '活动总览',
-      time: `累计 ${totalActivities} 场活动`
+      icon: 'user',
+      title: '用户总数',
+      time: `平台共有 ${totalUsers} 名注册用户`
     },
     {
-      icon: 'user',
-      title: '活跃成员',
-      time: `${activeMembers} 名成员近期活跃`
+      icon: 'course',
+      title: '课程管理',
+      time: `共 ${totalCourses} 门课程，其中 ${activeCourses} 门已发布`
     },
     {
       icon: 'system',
-      title: '审批通过率',
-      time: `当前通过率 ${formatPercent(approvalRate)}`
+      title: '作业统计',
+      time: `平台共有 ${totalAssignments} 个作业任务`
     }
   ]
 
-  pendingTasks.value = [
-    {
-      id: 'pending-applications',
+  // 更新待处理任务数据
+  pendingTasks.value = []
+  
+  if (pendingApprovals > 0) {
+    pendingTasks.value.push({
+      id: 'pending-approvals',
       icon: '📋',
-      title: '待审批申请',
-      info: `共有 ${pendingApplications} 条申请待处理`,
+      title: '待审批事项',
+      info: `共有 ${pendingApprovals} 项待审批`,
       actionText: '前往审批',
       actionClass: 'btn-primary',
       type: 'approval'
-    },
-    {
-      id: 'activity-report',
+    })
+  }
+  
+  if (totalCourses > 0) {
+    pendingTasks.value.push({
+      id: 'course-management',
       icon: '📚',
-      title: '活动数据总览',
-      info: `活动数量 ${totalActivities}，请关注执行情况`,
-      actionText: '查看',
+      title: '课程管理',
+      info: `共 ${totalCourses} 门课程，${activeCourses} 门已发布`,
+      actionText: '查看课程',
       actionClass: 'btn-secondary',
       type: 'course'
-    },
-    {
-      id: 'member-trend',
-      icon: '👥',
-      title: '成员活跃趋势',
-      info: `${activeMembers}/${totalMembers} 成员活跃`,
-      actionText: '查看趋势',
+    })
+  }
+  
+  if (totalAssignments > 0) {
+    pendingTasks.value.push({
+      id: 'assignment-overview',
+      icon: '📝',
+      title: '作业总览',
+      info: `平台共有 ${totalAssignments} 个作业任务`,
+      actionText: '查看详情',
       actionClass: 'btn-secondary',
-      type: 'member'
-    }
-  ]
+      type: 'course'
+    })
+  }
+  
+  // 如果没有待处理任务，显示默认提示
+  if (pendingTasks.value.length === 0) {
+    pendingTasks.value.push({
+      id: 'no-tasks',
+      icon: '✅',
+      title: '暂无待处理任务',
+      info: '所有事项已完成',
+      actionText: '刷新',
+      actionClass: 'btn-secondary',
+      type: 'refresh'
+    })
+  }
 }
 
 const formatPercent = (value) => {
