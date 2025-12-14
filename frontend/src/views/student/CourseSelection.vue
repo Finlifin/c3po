@@ -52,7 +52,7 @@ const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
 
 // 获取token
 const getToken = () => {
-  return localStorage.getItem('token')
+  return localStorage.getItem('Stoken')
 }
 
 // 检查token有效性
@@ -375,27 +375,18 @@ const handlePageChange = (newPage: number) => {
     </div>
   </div>
 </template>
-
 <style scoped>
-.student-dashboard {
-  width: 100vw;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  display: flex;
-  overflow: hidden;
-}
 
-
-
-/* 右侧主内容 */
+/* 右侧主内容 - 关键修改 */
 .main-content {
-  
   flex: 1;
   margin-left: 2px;
   display: flex;
   flex-direction: column;
-  width: calc(100vw - 280px);
+  width: 100%; /* 移除calc，改为100%，由flex控制宽度 */
+  overflow-x: hidden; /* 禁止主内容横向滚动 */
 }
+
 
 .main-content .header {
   background-color: white;
@@ -446,10 +437,10 @@ const handlePageChange = (newPage: number) => {
 .content {
   margin-left: 160px;
   padding: 30px;
-  max-width: 1400px;
- 
-  width: 100%;
-  box-sizing: border-box;
+  /* 移除max-width，或保留但增加overflow-x: hidden */
+  width: 88%;
+  box-sizing: border-box; /* 确保padding不超出宽度 */
+  overflow-x: hidden; /* 禁止内容区横向滚动 */
 }
 
 /* 搜索和筛选 */
@@ -506,8 +497,12 @@ const handlePageChange = (newPage: number) => {
   background-color: white;
   padding: 30px;
   border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  overflow-x: auto; /* 表格超出时纵向滚动，而非页面整体滑动 */
+  max-width: 100%; /* 限制表格容器宽度 */
 }
+
+
 
 .section-title {
   display: flex;

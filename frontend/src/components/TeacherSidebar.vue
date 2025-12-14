@@ -42,14 +42,14 @@ const logout = () => {
         <span class="menu-icon">📚</span>
         <span class="menu-text">课程管理</span>
       </div>
-      <div 
+      <!-- <div 
         class="menu-item" 
         :class="{ active: props.activeMenu === 'assignment-management' }"
         @click="router.push('/teacher/assignment-management')"
       >
         <span class="menu-icon">📝</span>
         <span class="menu-text">作业管理</span>
-      </div>
+      </div> -->
       <div 
         class="menu-item" 
         :class="{ active: props.activeMenu === 'grade-management' }"
@@ -58,7 +58,7 @@ const logout = () => {
         <span class="menu-icon">📊</span>
         <span class="menu-text">成绩管理</span>
       </div>
-      <div 
+      <!-- <div 
         class="menu-item" 
         :class="{ active: props.activeMenu === 'student-management' }"
         @click="router.push('/teacher/student-management')"
@@ -81,7 +81,7 @@ const logout = () => {
       >
         <span class="menu-icon">👤</span>
         <span class="menu-text">个人中心</span>
-      </div>
+      </div> -->
       <div 
         class="menu-item"
         @click="logout"

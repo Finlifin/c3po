@@ -9,9 +9,7 @@ import router from '../router'
       <div class="nav-content">
         <div class="nav-logo">智慧学习平台</div>
         <div class="nav-links">
-          <a href="#">首页</a>
-          <a href="#student-login">学生登录</a>
-          <a href="#teacher-login">教师登录</a>
+       
         </div>
       </div>
     </div>
@@ -21,7 +19,7 @@ import router from '../router'
       <div class="banner-content">
         <h1>大学生智慧学习平台</h1>
         <p>为大学生和教师提供高效、智能的学习与管理环境，实现课程学习、作业管理、成绩查询、数据统计等功能</p>
-        <button class="start-btn">开始使用</button>
+    
       </div>
     </div>
 
@@ -84,7 +82,7 @@ import router from '../router'
 
     <!-- 页脚 -->
     <div class="footer">
-      <p>© 2024 大学生智慧学习平台. 保留所有权利</p>
+      <p>©2025 大学生智慧学习平台. 保留所有权利</p>
     </div>
   </div>
 </template>

@@ -7,7 +7,7 @@
       </div>
     </div>
     <div class="sidebar-menu">
-      <div class="menu-item" :class="{ active: activeMenu === 'dashboard' }">
+      <div class="menu-item" :class="{ active: activeMenu === 'dashboard' }" @click="router.push('/student/dashboard')">
         <span class="menu-icon">🏠</span>
         <span class="menu-text">首页</span>
       </div>
@@ -15,11 +15,11 @@
         <span class="menu-icon">📚</span>
         <span class="menu-text">我的课程</span>
       </div>
-      <div class="menu-item" :class="{ active: activeMenu === 'assignments' }">
+      <!-- <div class="menu-item" :class="{ active: activeMenu === 'assignments' }">
         <span class="menu-icon">📝</span>
         <span class="menu-text">作业</span>
-      </div>
-      <div class="menu-item" :class="{ active: activeMenu === 'grades' }">
+      </div> -->
+      <div class="menu-item" :class="{ active: activeMenu === 'scores' }" @click="router.push('/student/scores')">
         <span class="menu-icon">📊</span>
         <span class="menu-text">成绩</span>
       </div>
@@ -27,10 +27,10 @@
         <span class="menu-icon">🎯</span>
         <span class="menu-text">选课</span>
       </div>
-      <div class="menu-item" :class="{ active: activeMenu === 'profile' }">
+      <!-- <div class="menu-item" :class="{ active: activeMenu === 'profile' }">
         <span class="menu-icon">👤</span>
         <span class="menu-text">个人中心</span>
-      </div>
+      </div> -->
       <div class="menu-item" @click="handleLogout">
         <span class="menu-icon">🚪</span>
         <span class="menu-text">退出登录</span>

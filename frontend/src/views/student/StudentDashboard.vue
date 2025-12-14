@@ -7,6 +7,9 @@ import StudentSidebar from '../../components/StudentSidebar.vue'
 // User data
 const user = ref<any>(null)
 const error = ref('')
+// Todo data
+const todos = ref<any[]>([])
+const loading = ref(false)
 
 // API configuration
 const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
@@ -14,7 +17,7 @@ const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
 // Fetch user information
 const fetchUserInfo = async () => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('Stoken')
     if (!token) {
       throw new Error('未登录')
     }
@@ -29,24 +32,48 @@ const fetchUserInfo = async () => {
   } catch (err: any) {
     error.value = err.response?.data?.message || '获取用户信息失败'
     // Redirect to login if token is invalid
-    localStorage.removeItem('token')
-    localStorage.removeItem('tokenType')
-    localStorage.removeItem('expiresIn')
+    localStorage.removeItem('Stoken')
+    localStorage.removeItem('StokenType')
+    localStorage.removeItem('SexpiresIn')
     router.push('/student')
+  }
+}
+
+// Fetch todos
+const fetchTodos = async () => {
+  try {
+    loading.value = true
+    const token = localStorage.getItem('Stoken')
+    if (!token) {
+      throw new Error('未登录')
+    }
+    
+    const response = await axios.get(`${API_BASE_URL}/todos`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    
+    todos.value = response.data.data || []
+  } catch (err: any) {
+    error.value = err.response?.data?.message || '获取待办事项失败'
+  } finally {
+    loading.value = false
   }
 }
 
 // Handle logout
 const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('tokenType')
-  localStorage.removeItem('expiresIn')
+  localStorage.removeItem('Stoken')
+  localStorage.removeItem('StokenType')
+  localStorage.removeItem('SexpiresIn')
   router.push('/student')
 }
 
-// Load user info on mount
-onMounted(() => {
-  fetchUserInfo()
+// Load data on mount
+onMounted(async () => {
+  await fetchUserInfo()
+  await fetchTodos()
 })
 </script>
 
@@ -66,9 +93,15 @@ onMounted(() => {
           </div>
         </div>
         <div class="header-right">
+          <div class="notification-icon" @click="router.push('/student/notifications')">
+            <span class="icon">🔔</span>
+          </div>
           <div class="user-info">
-            <span class="username">{{ user?.username }}</span>
-            <span class="email">{{ user?.email }}</span>
+            <div class="avatar">{{ user?.username.charAt(0) }}</div>
+            <div class="user-details">
+              <span class="username">{{ user?.username }}</span>
+              <span class="email">{{ user?.email }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -76,43 +109,44 @@ onMounted(() => {
       <div class="content">
         <div class="welcome-section">
           <h2>欢迎回来，{{ user?.username }}同学</h2>
-          <p>这是您的学生仪表板，您可以在这里查看课程、作业和成绩。</p>
+          
         </div>
         
-        <div class="dashboard-grid">
-          <div class="card">
-            <div class="card-icon">📚</div>
-            <div class="card-content">
-              <h3>我的课程</h3>
-              <p>查看当前学习的课程</p>
-              <button class="card-btn">进入课程</button>
-            </div>
+        <div class="todos-section">
+          <h3>我的待办事项</h3>
+          
+          <div v-if="loading" class="loading">
+            <p>加载中...</p>
           </div>
           
-          <div class="card">
-            <div class="card-icon">📝</div>
-            <div class="card-content">
-              <h3>我的作业</h3>
-              <p>查看和提交作业</p>
-              <button class="card-btn">查看作业</button>
-            </div>
+          <div v-else-if="error" class="error">
+            <p>{{ error }}</p>
           </div>
           
-          <div class="card">
-            <div class="card-icon">📊</div>
-            <div class="card-content">
-              <h3>我的成绩</h3>
-              <p>查看考试和作业成绩</p>
-              <button class="card-btn">查看成绩</button>
-            </div>
+          <div v-else-if="todos.length === 0" class="empty">
+            <p>暂无待办事项</p>
           </div>
           
-          <div class="card">
-            <div class="card-icon">💬</div>
-            <div class="card-content">
-              <h3>我的消息</h3>
-              <p>查看教师和系统消息</p>
-              <button class="card-btn">查看消息</button>
+          <div v-else class="todos-grid">
+            <div 
+              v-for="todo in todos" 
+              :key="todo.id" 
+              class="todo-card"
+              :class="todo.status"
+              @click="router.push(`/student/assignments/${todo.id}/submit`)"
+              style="cursor: pointer;"
+            >
+              <div class="todo-header">
+                <h4>{{ todo.title }}</h4>
+                <span class="todo-status">{{ todo.status === 'pending' ? '待完成' : '已提交' }}</span>
+              </div>
+              <div class="todo-content">
+                <!-- <p class="todo-description">{{ todo.description }}</p> -->
+                <div class="todo-meta">
+                  <span class="todo-type">{{ todo.type }}</span>
+                  <span class="todo-due">截止日期: {{ new Date(todo.dueAt).toLocaleString() }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -123,7 +157,7 @@ onMounted(() => {
 
 <style scoped>
 .student-dashboard {
-  width: 100vw;
+  width: 114%;
   min-height: 100vh;
   background-color: #f5f5f5;
   display: flex;
@@ -207,17 +241,19 @@ onMounted(() => {
 
 /* 右侧主内容 */
 .main-content {
+ 
   flex: 1;
-  margin-left: 280px;
+  margin-left: 110px;
   display: flex;
   flex-direction: column;
-  width: calc(100vw - 280px);
+  overflow-x: hidden;
 }
 
 .main-content .header {
   background-color: white;
   color: #333;
   padding: 15px 30px;
+  width: 1300px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -241,11 +277,44 @@ onMounted(() => {
 .header-right {
   display: flex;
   align-items: center;
+
   gap: 20px;
 }
 
+.notification-icon {
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.notification-icon:hover {
+  color: #667eea;
+  transform: scale(1.1);
+}
+
 .user-info {
-  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.user-details {
+  text-align: left;
 }
 
 .user-info .username {
@@ -261,9 +330,10 @@ onMounted(() => {
 }
 
 .content {
+  margin-left: 30px;
   padding: 30px;
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: 1300px;
+
   width: 100%;
   box-sizing: border-box;
 }
@@ -288,61 +358,121 @@ onMounted(() => {
   margin: 0;
 }
 
-.dashboard-grid {
+/* 待办事项样式 */
+.todos-section {
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+}
+
+.todos-section h3 {
+  color: #333;
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.loading, .error, .empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+  font-size: 1rem;
+}
+
+.error {
+  color: #e74c3c;
+}
+
+.todos-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
 }
 
-.card {
+.todo-card {
   background-color: white;
   border-radius: 12px;
-  padding: 25px;
+  padding: 20px;
   box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+  border: 2px solid #e0e0e0;
 }
 
-.card:hover {
+.todo-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
-.card-icon {
-  font-size: 3rem;
+.todo-card.pending {
+  border-color: #f39c12;
 }
 
-.card-content h3 {
+.todo-card.submitted {
+  border-color: #27ae60;
+}
+
+.todo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.todo-header h4 {
   color: #333;
   font-size: 1.2rem;
-  margin-bottom: 8px;
+  margin: 0;
+  flex: 1;
 }
 
-.card-content p {
+.todo-status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.todo-card.pending .todo-status {
+  background-color: rgba(243, 156, 18, 0.1);
+  color: #f39c12;
+}
+
+.todo-card.submitted .todo-status {
+  background-color: rgba(39, 174, 96, 0.1);
+  color: #27ae60;
+}
+
+.todo-content {
   color: #666;
-  font-size: 0.9rem;
+}
+
+.todo-description {
+  font-size: 0.95rem;
   margin-bottom: 15px;
   line-height: 1.5;
 }
 
-.card-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  align-self: flex-start;
+.todo-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
 }
 
-.card-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+.todo-type {
+  padding: 3px 8px;
+  background-color: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  border-radius: 6px;
+  align-self: flex-start;
+  text-transform: capitalize;
+}
+
+.todo-due {
+  color: #888;
 }
 
 /* 响应式设计 */
@@ -370,7 +500,7 @@ onMounted(() => {
     padding: 15px;
   }
   
-  .dashboard-grid {
+  .todos-grid {
     grid-template-columns: 1fr;
   }
 }

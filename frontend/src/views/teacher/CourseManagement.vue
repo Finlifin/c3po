@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import axios from 'axios'
 import { ref, onMounted } from 'vue'
-import router from '../router'
-import TeacherSidebar from '../components/TeacherSidebar.vue'
+import router from '../../router'
+import TeacherSidebar from '../../components/TeacherSidebar.vue'
 
 // 生成年份选择器的选项
 const currentYear = new Date().getFullYear();
@@ -441,13 +441,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.course-management {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-  overflow-x: hidden;
-  background-color: #f5f7fa;
-}
+
 .left-menu {
   width: 260px;       /* 固定宽度 */
   flex-shrink: 0;     /* 不允许缩小 */
@@ -456,12 +450,11 @@ onMounted(() => {
 
 /* 右侧主内容区 */
 .main-content {
-  margin-left: 100px;
+  margin-left: 10%;
   flex: 1;
   display: flex;
   flex-direction: column;
   height: 100vh;
-  overflow-y: auto;
 }
 
 /* 响应式设计 */

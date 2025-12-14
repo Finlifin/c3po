@@ -2,7 +2,7 @@
 import axios from 'axios'
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import TeacherSidebar from '../components/TeacherSidebar.vue'
+import TeacherSidebar from '../../components/TeacherSidebar.vue'
 
 // API配置
 const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
@@ -239,12 +239,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.publish-assignment {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-  background-color: #f5f7fa;
-}
+
 
 .main-content {
   margin-left: 250px;

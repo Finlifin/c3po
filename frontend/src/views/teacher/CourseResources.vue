@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import router from '../router'
+import router from '../../router'
 import axios from 'axios'
-import TeacherSidebar from '../components/TeacherSidebar.vue'
+import TeacherSidebar from '../../components/TeacherSidebar.vue'
 import { onMounted, ref, watch } from 'vue'
 
 // 资源数据类型定义
@@ -476,13 +476,7 @@ const submitResource = async () => {
 </template>
 
 <style scoped>
-.course-resources {
-  width: 100vw;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  display: flex;
-  overflow: hidden;
-}
+
 
 /* 左侧菜单栏 */
 .sidebar {
@@ -562,10 +556,10 @@ const submitResource = async () => {
 /* 右侧主内容 */
 .main-content {
   flex: 1;
-  margin-left: 2px; /* 关键修复：设置合适的左边距 */
+  margin-left: 10%; /* 关键修复：设置合适的左边距 */
   display: flex;
   flex-direction: column;
-  width: calc(100vw - 283px); /* 关键修复：正确计算可用宽度 */
+  width: 140%;
   min-height: 98vh;
   background-color: #ffffff;
   border-radius: 24px 0 0 22px; /* 可选：圆角效果 */
