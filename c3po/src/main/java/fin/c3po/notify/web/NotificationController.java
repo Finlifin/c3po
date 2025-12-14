@@ -17,6 +17,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +39,7 @@ public class NotificationController {
     private static final int MAX_PAGE_SIZE = 100;
     private final NotificationRepository notificationRepository;
 
+    @Transactional(readOnly = true)
     @GetMapping("/notifications")
     public ApiResponse<List<NotificationResponse>> listNotifications(
             @RequestParam(name = "page", defaultValue = "1") int page,
@@ -58,7 +60,13 @@ public class NotificationController {
         }
 
         Page<Notification> pageResult = notificationRepository.findAll(spec, pageable);
-        List<NotificationResponse> data = pageResult.getContent().stream()
+        List<Notification> notifications = pageResult.getContent();
+        // 在事务内触发懒加载集合的加载，确保在 Session 关闭前加载
+        notifications.forEach(n -> {
+            // 访问集合以触发懒加载
+            n.getSendChannels().size();
+        });
+        List<NotificationResponse> data = notifications.stream()
                 .map(this::toResponse)
                 .toList();
 

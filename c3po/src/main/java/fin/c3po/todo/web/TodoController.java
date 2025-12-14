@@ -13,6 +13,7 @@ import fin.c3po.submission.SubmissionRepository;
 import fin.c3po.submission.SubmissionStatus;
 import fin.c3po.todo.dto.TodoResponse;
 import fin.c3po.user.UserAccount;
+import fin.c3po.user.UserAccountRepository;
 import fin.c3po.user.UserRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,7 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -37,6 +40,7 @@ public class TodoController {
     private final SubmissionRepository submissionRepository;
     private final CourseRepository courseRepository;
     private final fin.c3po.approval.ApprovalRequestRepository approvalRequestRepository;
+    private final UserAccountRepository userAccountRepository;
 
     @GetMapping("/todos")
     public ApiResponse<List<TodoResponse>> todos(@AuthenticationPrincipal UserAccount currentUser) {
@@ -63,6 +67,10 @@ public class TodoController {
             if (selection.getStatus() != SelectionStatus.ENROLLED) {
                 continue;
             }
+            Course course = courseRepository.findById(selection.getCourseId()).orElse(null);
+            if (course == null) {
+                continue;
+            }
             List<Assignment> assignments = assignmentRepository.findByCourseId(selection.getCourseId());
             for (Assignment assignment : assignments) {
                 Submission submission = submissionRepository
@@ -71,12 +79,13 @@ public class TodoController {
                 boolean needsAction = submission == null || submission.getStatus() != SubmissionStatus.GRADED;
                 if (needsAction) {
                     todos.add(TodoResponse.builder()
-                            .id(UUID.randomUUID())
+                            .id(assignment.getId())
                             .type("assignment")
                             .title("提交作业：" + assignment.getTitle())
                             .description("课程 ID: " + assignment.getCourseId())
                             .dueAt(assignment.getDeadline())
                             .status(submission == null ? "pending" : "submitted")
+                            .summary(buildAssignmentSummary(assignment, course))
                             .build());
                 }
             }
@@ -96,12 +105,13 @@ public class TodoController {
                         .count();
                 if (pendingSubmissions > 0) {
                     todos.add(TodoResponse.builder()
-                            .id(UUID.randomUUID())
+                            .id(assignment.getId())
                             .type("grading")
                             .title("批改作业：" + assignment.getTitle())
                             .description("待批改提交数：" + pendingSubmissions)
                             .dueAt(assignment.getDeadline())
                             .status("pending")
+                            .summary(buildAssignmentSummary(assignment, course))
                             .build());
                 }
             }
@@ -114,6 +124,8 @@ public class TodoController {
         if (pendingApprovals == 0) {
             return List.of();
         }
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("pendingCount", pendingApprovals);
         return List.of(TodoResponse.builder()
                 .id(UUID.randomUUID())
                 .type("approval")
@@ -121,7 +133,26 @@ public class TodoController {
                 .description("待审批数量：" + pendingApprovals)
                 .dueAt(Instant.now())
                 .status("pending")
+                .summary(summary)
                 .build());
+    }
+
+    private Map<String, Object> buildAssignmentSummary(Assignment assignment, Course course) {
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("assignmentId", assignment.getId());
+        summary.put("assignmentTitle", assignment.getTitle());
+        summary.put("courseId", course.getId());
+        summary.put("courseName", course.getName());
+        summary.put("deadline", assignment.getDeadline());
+        
+        // 获取发布者信息（教师）
+        UserAccount teacher = userAccountRepository.findById(course.getTeacherId()).orElse(null);
+        if (teacher != null) {
+            summary.put("publisherId", teacher.getId());
+            summary.put("publisherName", teacher.getUsername());
+        }
+        
+        return summary;
     }
 }
 

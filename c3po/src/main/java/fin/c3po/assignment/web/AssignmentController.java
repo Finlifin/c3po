@@ -44,8 +44,8 @@ public class AssignmentController {
     private final CourseRepository courseRepository;
     private final ObjectMapper objectMapper;
 
-    private static final TypeReference<List<CreateAssignmentRequest.RubricItem>> RUBRIC_TYPE =
-            new TypeReference<>() {};
+    private static final TypeReference<List<CreateAssignmentRequest.RubricItem>> RUBRIC_TYPE = new TypeReference<>() {
+    };
 
     @GetMapping("/courses/{courseId}/assignments")
     public ApiResponse<List<AssignmentResponse>> listAssignments(@PathVariable UUID courseId) {
@@ -59,7 +59,7 @@ public class AssignmentController {
 
     @GetMapping("/assignments/{assignmentId}")
     public ApiResponse<AssignmentResponse> getAssignment(@PathVariable UUID assignmentId) {
-        Assignment assignment = assignmentRepository.findById(assignmentId)
+        Assignment assignment = assignmentRepository.findWithTagsById(assignmentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
         return ApiResponse.success(toResponse(assignment));
     }
@@ -247,5 +247,3 @@ public class AssignmentController {
         }
     }
 }
-
-

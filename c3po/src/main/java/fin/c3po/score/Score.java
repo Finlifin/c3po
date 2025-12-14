@@ -27,6 +27,7 @@ public class Score extends BaseEntity {
     @Column(nullable = false, length = 64)
     private String component;
 
+    @Column(name = "\"value\"")
     private Integer value;
 
     private Instant releasedAt;

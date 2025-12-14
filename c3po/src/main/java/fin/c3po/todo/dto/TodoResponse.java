@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Value;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Value
@@ -15,6 +16,7 @@ public class TodoResponse {
     String description;
     Instant dueAt;
     String status;
+    Map<String, Object> summary;
 }
 
 

@@ -137,8 +137,9 @@ public class SubmissionController {
             @Valid @RequestBody UpdateSubmissionRequest request,
             @AuthenticationPrincipal UserAccount currentUser) {
 
-        Submission submission = submissionRepository.findById(submissionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
+
+        Submission submission = submissionRepository.findWithAttachmentsById(submissionId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
         if (!submission.getStudentId().equals(currentUser.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to update this submission");
         }
@@ -178,8 +179,9 @@ public class SubmissionController {
             @PathVariable UUID submissionId,
             @AuthenticationPrincipal UserAccount currentUser) {
 
-        Submission submission = submissionRepository.findById(submissionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
+
+        Submission submission = submissionRepository.findWithAttachmentsById(submissionId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
 
         if (currentUser == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated");
@@ -201,8 +203,8 @@ public class SubmissionController {
             @Valid @RequestBody GradeSubmissionRequest request,
             @AuthenticationPrincipal UserAccount currentUser) {
 
-        Submission submission = submissionRepository.findById(submissionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
+        Submission submission = submissionRepository.findWithAttachmentsById(submissionId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
         Assignment assignment = assignmentRepository.findById(submission.getAssignmentId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
 
