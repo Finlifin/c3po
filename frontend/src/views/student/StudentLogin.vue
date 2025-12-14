@@ -38,9 +38,9 @@ const handleSubmit = async () => {
       })
       
       // Save token
-      localStorage.setItem('token', response.data.accessToken)
-      localStorage.setItem('tokenType', response.data.tokenType)
-      localStorage.setItem('expiresIn', response.data.expiresIn.toString())
+      localStorage.setItem('Stoken', response.data.accessToken)
+      localStorage.setItem('StokenType', response.data.tokenType)
+      localStorage.setItem('SexpiresIn', response.data.expiresIn.toString())
       
       // Redirect to student page
       router.push('/student/dashboard')
@@ -67,9 +67,9 @@ const handleSubmit = async () => {
       })
       
       // Save token
-      localStorage.setItem('token', response.data.accessToken)
-      localStorage.setItem('tokenType', response.data.tokenType)
-      localStorage.setItem('expiresIn', response.data.expiresIn.toString())
+      localStorage.setItem('Stoken', response.data.accessToken)
+      localStorage.setItem('StokenType', response.data.tokenType)
+      localStorage.setItem('SexpiresIn', response.data.expiresIn.toString())
       
       // Redirect to student page
       router.push('/student/dashboard')

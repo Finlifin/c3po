@@ -34,7 +34,7 @@ const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
 
 // 获取token
 const getToken = () => {
-  return localStorage.getItem('token')
+  return localStorage.getItem('Stoken')
 }
 
 // 检查token有效性
@@ -300,7 +300,7 @@ const getStatusText = (status: string): string => {
 
 <style scoped>
 .my-courses {
-  width: 100vw;
+  width: 114%;
   min-height: 100vh;
   background-color: #f5f5f5;
   display: flex;
@@ -310,7 +310,7 @@ const getStatusText = (status: string): string => {
 /* 右侧主内容 */
 .main-content {
   flex: 1;
-  margin-left: 280px; /* 与侧边栏宽度一致 */
+  margin-left: 120px; /* 与侧边栏宽度一致 */
   display: flex;
   flex-direction: column;
   width: calc(100vw - 280px);

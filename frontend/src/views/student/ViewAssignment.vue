@@ -249,7 +249,7 @@ const UPLOAD_API_BASE_URL = 'http://10.70.141.134:5000/api/v1'
 
 // 获取token
 const getToken = () => {
-  return localStorage.getItem('token')
+  return localStorage.getItem('Stoken')
 }
 
 // 检查token有效性
@@ -270,7 +270,7 @@ const checkAuth = () => {
 
 // 处理退出登录
 const logout = () => {
-  localStorage.removeItem('token')
+  localStorage.removeItem('Stoken')
   localStorage.removeItem('user')
   router.push('/student')
 }
@@ -497,7 +497,7 @@ onMounted(() => {
 
 <style scoped>
 .view-assignment {
-  width: 100vw;
+  width: 113%;
   min-height: 100vh;
   background-color: #f5f5f5;
   display: flex;
@@ -507,7 +507,7 @@ onMounted(() => {
 /* 右侧主内容 */
 .main-content {
   flex: 1;
-  margin-left: 20px; /* 与侧边栏宽度一致 */
+  margin-left: 220px; /* 与侧边栏宽度一致 */
   display: flex;
   flex-direction: column;
   width: calc(100vw - 280px);
