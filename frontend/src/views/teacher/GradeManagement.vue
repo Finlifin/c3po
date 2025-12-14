@@ -1,18 +1,12 @@
 <script setup lang="ts">
-import axios from 'axios'
 import { ref, onMounted } from 'vue'
-import router from '../../router'
-import TeacherSidebar from '../../components/TeacherSidebar.vue'
-// 引入Element UI Plus组件
-import { ElTable, ElTableColumn, ElButton, ElTag, ElLoading, ElMessage } from 'element-plus'
-import 'element-plus/dist/index.css'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
+import { teacherApi } from '../../api/teacher'
+import { ElMessage } from 'element-plus'
 
-// 生成年份选择器的选项
-const currentYear = new Date().getFullYear();
-const years = ref(Array.from({ length: currentYear - 2020 + 6 }, (_, i) => (2020 + i).toString()));
-
-// API配置
-const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
+const router = useRouter()
+const authStore = useAuthStore()
 
 // 课程数据类型定义
 interface Course {
@@ -45,35 +39,10 @@ const isLoading = ref(true)
 const error = ref('')
 const gradeStatusMap = ref<Record<string, GradeStatus>>({})
 
-// 获取教师信息
-const getCurrentUser = async () => {
-  try {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      return null
-    }
-    
-    const response = await axios.get(`${API_BASE_URL}/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-    
-    return response.data
-  } catch (err: any) {
-    console.error('获取用户信息失败:', err)
-    return null
-  }
-}
-
 // 获取课程成绩状态
 const fetchCourseGradeStatus = async (courseId: string) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/courses/${courseId}/scores`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    })
+    const response = await teacherApi.getCourseScores(courseId)
     
     // 只有当items不为空时，才表示已发布成绩
     if (response.data.success && response.data.data?.items && response.data.data.items.length > 0) {
@@ -102,23 +71,18 @@ const fetchCourseGradeStatus = async (courseId: string) => {
 const fetchCourses = async () => {
   try {
     isLoading.value = true
-    const user = await getCurrentUser()
-    if (!user?.id) {
+    if (!authStore.user?.id) {
+      await authStore.fetchUserInfo()
+    }
+    
+    if (!authStore.user?.id) {
       throw new Error('未获取到教师ID')
     }
     
-    // 发送带teacherId参数的GET请求
-    const response = await axios.get(`${API_BASE_URL}/courses`, {
-      params: { 
-        teacherId: user.id 
-      },
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    })
+    const response = await teacherApi.getCourses(authStore.user.id)
     
     // 只保留已发布的课程
-    courses.value = (response.data.data || []).filter(course => course.status === 'PUBLISHED')
+    courses.value = (response.data.data || []).filter((course: Course) => course.status === 'PUBLISHED')
     
     // 为每个课程获取成绩状态
     for (const course of courses.value) {
@@ -127,6 +91,7 @@ const fetchCourses = async () => {
   } catch (err: any) {
     error.value = err.response?.data?.message || '获取课程列表失败'
     console.error('获取课程列表失败:', err)
+    ElMessage.error(error.value)
   } finally {
     isLoading.value = false
   }
@@ -134,40 +99,12 @@ const fetchCourses = async () => {
 
 // 进入查看成绩页面
 const goToViewGrades = (courseId: string) => {
-  ElMessage({
-    message: '正在进入查看成绩页面',
-    type: 'info',
-    duration: 1000
-  })
   router.push(`/teacher/courses/${courseId}/grades`)
 }
 
 // 进入发布成绩页面
 const goToPublishGrades = (courseId: string) => {
-  ElMessage({
-    message: '正在进入发布成绩页面',
-    type: 'info',
-    duration: 1000
-  })
   router.push(`/teacher/courses/${courseId}/grades/publish`)
-}
-
-// 退出登录
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('tokenType')
-  localStorage.removeItem('expiresIn')
-  router.push('/teacher')
-}
-
-// 获取课程状态文本
-const getCourseStatusText = (status: string) => {
-  const statusMap: Record<string, string> = {
-    'DRAFT': '草稿',
-    'PENDING_REVIEW': '待审核',
-    'PUBLISHED': '已发布'
-  }
-  return statusMap[status] || status
 }
 
 // 获取成绩状态文本
@@ -183,21 +120,20 @@ onMounted(() => {
 
 <template>
   <div class="grade-management">
-    <!-- 左侧固定菜单栏 -->
-    <TeacherSidebar class="left-menu" activeMenu="grade-management" />
-
-    <!-- 右侧主内容区 -->
-    <div class="main-content">
+    <div class="content">
       <div class="header">
         <h2>成绩管理</h2>
       </div>
 
       <!-- 课程列表 -->
       <div class="courses-container">
-        <div v-if="isLoading" class="loading">加载中...</div>
+        <div v-if="isLoading" class="loading">
+          <div class="spinner"></div>
+          <p>加载中...</p>
+        </div>
         <div v-else-if="error" class="error-message">{{ error }}</div>
         <div v-else-if="courses.length === 0" class="empty-courses">
-          <p>暂无课程，请先创建课程</p>
+          <p>暂无已发布的课程</p>
         </div>
         <el-table 
           v-else 
@@ -271,56 +207,34 @@ onMounted(() => {
 
 <style scoped>
 .grade-management {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-  overflow-x: hidden;
-  background-color: #f5f7fa;
-}
-.left-menu {
-  width: 260px;       /* 固定宽度 */
-  flex-shrink: 0;     /* 不允许缩小 */
+  width: 100%;
+  min-height: 100%;
 }
 
-
-/* 右侧主内容区 */
-.main-content {
-  margin-left: 100px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow-y: auto;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .main-content {
-    margin-left: 60px;
-  }
+.content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 30px;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 30px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
 }
 
 .header h2 {
+  font-size: 24px;
+  color: #333;
   margin: 0;
-  font-size: 1.8rem;
-  font-weight: 600;
 }
 
-/* 课程列表 */
 .courses-container {
-  padding: 30px;
-  flex: 1;
-  background-color: #f5f7fa;
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 
 .loading, .empty-courses, .error-message {
@@ -330,12 +244,23 @@ onMounted(() => {
   color: #666;
 }
 
-.loading {
-  color: #667eea;
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #667eea;
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .error-message {
-  color: #ef4444;
+  color: #ff4d4f;
   background-color: #fee2e2;
   border-radius: 8px;
   padding: 20px;
@@ -345,7 +270,6 @@ onMounted(() => {
 :deep(.el-table) {
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 :deep(.el-table__header) {
@@ -362,21 +286,5 @@ onMounted(() => {
   color: #065f46;
   margin-top: 4px;
   font-weight: 500;
-}
-
-.courses-container {
-  overflow-x: auto;
-}
-
-/* 确保表格在小屏幕上也能正常显示 */
-@media (max-width: 768px) {
-  :deep(.el-table) {
-    font-size: 0.9rem;
-  }
-  
-  :deep(.el-button) {
-    padding: 4px 8px;
-    font-size: 0.8rem;
-  }
 }
 </style>

@@ -16,8 +16,7 @@ public class ProfileResponse {
     String email;
     UserRole role;
     UserStatus status;
+    String avatarUrl;
     Instant createdAt;
     Instant updatedAt;
 }
-
-

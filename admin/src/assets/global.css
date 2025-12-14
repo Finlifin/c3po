@@ -65,7 +65,12 @@ a:hover {
 }
 
 /* 标题样式 */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: 600;
   line-height: 1.2;
   margin-bottom: var(--spacing-sm);
@@ -102,7 +107,8 @@ p {
 }
 
 /* 列表样式 */
-ul, ol {
+ul,
+ol {
   margin-bottom: var(--spacing-md);
   padding-left: var(--spacing-lg);
 }
@@ -112,14 +118,19 @@ li {
 }
 
 /* 表单元素基础样式 */
-input, textarea, select, button {
+input,
+textarea,
+select,
+button {
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
   color: inherit;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -127,13 +138,16 @@ input, textarea, select {
   transition: all 0.2s ease;
 }
 
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
 }
 
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--text-secondary);
 }
 
@@ -563,19 +577,19 @@ button.warning:hover:not(:disabled) {
     padding-left: var(--spacing-md);
     padding-right: var(--spacing-md);
   }
-  
+
   .hide-mobile {
     display: none !important;
   }
-  
+
   h1 {
     font-size: 2rem;
   }
-  
+
   h2 {
     font-size: 1.75rem;
   }
-  
+
   h3 {
     font-size: 1.5rem;
   }
@@ -633,7 +647,6 @@ button.warning:hover:not(:disabled) {
 /* 布局容器 */
 .container {
   width: 100%;
-  max-width: 1200px;
   margin: 0 auto;
   padding: 0 var(--spacing-md);
 }

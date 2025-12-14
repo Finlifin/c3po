@@ -50,8 +50,8 @@ public class SubmissionController {
     private final CourseRepository courseRepository;
     private final ObjectMapper objectMapper;
 
-    private static final TypeReference<List<GradeSubmissionRequest.RubricScore>> RUBRIC_TYPE =
-            new TypeReference<>() {};
+    private static final TypeReference<List<GradeSubmissionRequest.RubricScore>> RUBRIC_TYPE = new TypeReference<>() {
+    };
 
     @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
     @GetMapping("/assignments/{assignmentId}/submissions")
@@ -84,7 +84,8 @@ public class SubmissionController {
 
         if (currentUser.getRole() == UserRole.STUDENT) {
             if (!currentUser.getId().equals(studentId)) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to view other students' submissions");
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Not allowed to view other students' submissions");
             }
         } else if (currentUser.getRole() == UserRole.TEACHER) {
             submissions = submissions.stream()
@@ -137,9 +138,8 @@ public class SubmissionController {
             @Valid @RequestBody UpdateSubmissionRequest request,
             @AuthenticationPrincipal UserAccount currentUser) {
 
-
         Submission submission = submissionRepository.findWithAttachmentsById(submissionId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
         if (!submission.getStudentId().equals(currentUser.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to update this submission");
         }
@@ -179,9 +179,8 @@ public class SubmissionController {
             @PathVariable UUID submissionId,
             @AuthenticationPrincipal UserAccount currentUser) {
 
-
         Submission submission = submissionRepository.findWithAttachmentsById(submissionId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
 
         if (currentUser == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated");
@@ -204,7 +203,7 @@ public class SubmissionController {
             @AuthenticationPrincipal UserAccount currentUser) {
 
         Submission submission = submissionRepository.findWithAttachmentsById(submissionId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
         Assignment assignment = assignmentRepository.findById(submission.getAssignmentId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
 
@@ -335,5 +334,3 @@ public class SubmissionController {
         }
     }
 }
-
-

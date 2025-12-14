@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import router from '../../router'
-import axios from 'axios'
 import { onMounted, ref, computed } from 'vue'
-import StudentSidebar from '../../components/StudentSidebar.vue'
+import { useAuthStore } from '../../stores/auth'
+import { studentApi } from '../../api/student'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import PageContainer from '../../components/layout/PageContainer.vue'
+import ContentGrid from '../../components/layout/ContentGrid.vue'
+
+const authStore = useAuthStore()
 
 // 课程数据类型定义
 interface CourseMetrics {
@@ -25,19 +28,9 @@ interface CourseResponse {
   metrics: CourseMetrics
 }
 
-// 选课响应类型定义
-interface CourseEnrollmentResponse {
-  selectionId: string
-  courseId: string
-  studentId: string
-  status: 'ENROLLED' | 'DROPPED'
-  selectedAt: string
-}
-
 // 状态变量
 const courses = ref<CourseResponse[]>([])
 const enrolledCourses = ref<any[]>([])
-const userInfo = ref<any>(null)
 const loading = ref(false)
 const error = ref('')
 const page = ref(1)
@@ -47,41 +40,12 @@ const searchKeyword = ref('')
 const selectedTeacherId = ref('')
 const selectedStatus = ref<'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'ARCHIVED' | ''>('')
 
-// API配置
-const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
-
-// 获取token
-const getToken = () => {
-  return localStorage.getItem('Stoken')
-}
-
-// 检查token有效性
-const checkAuth = () => {
-  const token = getToken()
-  if (!token) {
-    router.push('/student')
-    return false
-  }
-  return true
-}
-
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('tokenType')
-  localStorage.removeItem('expiresIn')
-  router.push('/student')
-}
-
 // 获取课程列表
 const fetchCourses = async () => {
-  if (!checkAuth()) return
-  
   loading.value = true
   error.value = ''
   
   try {
-    const token = getToken()
     const params = {
       page: page.value,
       pageSize: pageSize.value,
@@ -91,12 +55,7 @@ const fetchCourses = async () => {
       sort: 'createdAt,desc'
     }
     
-    const response = await axios.get(`${API_BASE_URL}/courses`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      params
-    })
+    const response = await studentApi.getAvailableCourses(params)
     
     courses.value = response.data.data
     // 处理分页信息
@@ -110,10 +69,36 @@ const fetchCourses = async () => {
   }
 }
 
+// 获取已选课程
+const fetchEnrolledCourses = async () => {
+  if (!authStore.user?.id) {
+    await authStore.fetchUserInfo()
+  }
+  
+  if (!authStore.user?.id) return
+
+  try {
+    const response = await studentApi.getMyCourses(authStore.user.id)
+    
+    let courseData = []
+    if (Array.isArray(response.data)) {
+      courseData = response.data
+    } else if (response.data && Array.isArray(response.data.data)) {
+      courseData = response.data.data
+    } else if (response.data && Array.isArray(response.data.courses)) {
+      courseData = response.data.courses
+    }
+    
+    enrolledCourses.value = courseData || []
+  } catch (err: any) {
+    const errorMsg = err.response?.data?.message || '获取已选课程失败'
+    console.error(errorMsg)
+    ElMessage.error(errorMsg)
+  }
+}
+
 // 选课
 const enrollCourse = async (course: CourseResponse) => {
-  if (!checkAuth()) return
-  
   try {
     await ElMessageBox.confirm(
       `确定选择"${course.name}"吗？`,
@@ -125,12 +110,7 @@ const enrollCourse = async (course: CourseResponse) => {
       }
     )
     
-    const token = getToken()
-    await axios.post(`${API_BASE_URL}/courses/${course.id}/enroll`, {}, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    await studentApi.enrollCourse(course.id)
     
     // 更新已选课程和课程列表
     await fetchEnrolledCourses()
@@ -138,7 +118,7 @@ const enrollCourse = async (course: CourseResponse) => {
     ElMessage.success('选课成功')
     
   } catch (err: any) {
-    if (err.name === 'ElMessageBoxCancel') {
+    if (err === 'cancel' || err.name === 'ElMessageBoxCancel') {
       return // 用户取消操作
     }
     const errorMsg = err.response?.data?.message || '选课失败'
@@ -149,8 +129,6 @@ const enrollCourse = async (course: CourseResponse) => {
 
 // 退课
 const dropCourse = async (course: CourseResponse) => {
-  if (!checkAuth()) return
-  
   try {
     await ElMessageBox.confirm(
       `确定退课"${course.name}"吗？`,
@@ -162,12 +140,7 @@ const dropCourse = async (course: CourseResponse) => {
       }
     )
     
-    const token = getToken()
-    await axios.delete(`${API_BASE_URL}/courses/${course.id}/enroll`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    await studentApi.dropCourse(course.id)
     
     // 更新已选课程和课程列表
     await fetchEnrolledCourses()
@@ -175,7 +148,7 @@ const dropCourse = async (course: CourseResponse) => {
     ElMessage.success('退课成功')
     
   } catch (err: any) {
-    if (err.name === 'ElMessageBoxCancel') {
+    if (err === 'cancel' || err.name === 'ElMessageBoxCancel') {
       return // 用户取消操作
     }
     const errorMsg = err.response?.data?.message || '退课失败'
@@ -184,46 +157,11 @@ const dropCourse = async (course: CourseResponse) => {
   }
 }
 
-// 获取用户信息
-const fetchUserInfo = async () => {
-  if (!checkAuth()) return
-  try {
-    const token = getToken()
-    const response = await axios.get(`${API_BASE_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    userInfo.value = response.data
-  } catch (err: any) {
-    const errorMsg = err.response?.data?.message || '获取用户信息失败'
-    console.error(errorMsg)
-    ElMessage.error(errorMsg)
-  }
-}
-
-// 获取已选课程
-const fetchEnrolledCourses = async () => {
-  if (!userInfo.value?.id || !checkAuth()) return
-  try {
-    const token = getToken()
-    const response = await axios.get(`${API_BASE_URL}/students/${userInfo.value.id}/courses`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    enrolledCourses.value = response.data.data || []
-  } catch (err: any) {
-    const errorMsg = err.response?.data?.message || '获取已选课程失败'
-    console.error(errorMsg)
-    ElMessage.error(errorMsg)
-  }
-}
-
 // 页面加载时初始化数据
 onMounted(async () => {
-  await fetchUserInfo()
   await fetchEnrolledCourses()
   await fetchCourses()
 })
-
-
 
 // 计算课程的选中状态
 const processedCourses = computed(() => {
@@ -251,91 +189,165 @@ const handlePageChange = (newPage: number) => {
 </script>
 
 <template>
-  <div class="student-dashboard">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="course-selection" @logout="logout" />
+  <PageContainer>
+    <!-- 搜索和筛选 -->
+    <div class="filter-section">
+      <div class="search-box">
+        <input 
+          type="text" 
+          v-model="searchKeyword"
+          placeholder="搜索课程名称"
+          @input="handleSearch"
+        >
+      </div>
+      <div class="filter-options">
+        <select v-model="selectedStatus" @change="handleSearch">
+          <option value="">全部</option>
+          <option value="PUBLISHED">已发布</option>
+          <option value="DRAFT">草稿</option>
+          <option value="PENDING_REVIEW">待审核</option>
+          <option value="ARCHIVED">已归档</option>
+        </select>
+        <input 
+          type="text" 
+          v-model="selectedTeacherId"
+          placeholder="教师ID"
+          @input="handleSearch"
+        >
+      </div>
+    </div>
     
-    <!-- 右侧主内容 -->
-    <div class="main-content">
-      <div class="content">
-        <!-- 搜索和筛选 -->
-        <div class="filter-section">
-          <div class="search-box">
-            <input 
-              type="text" 
-              v-model="searchKeyword"
-              placeholder="搜索课程名称"
-              @input="handleSearch"
+    <!-- 课程列表 -->
+    <div class="courses-section">
+      <div class="section-title">
+        <h2>课程列表</h2>
+        <span class="total-count">共 {{ total }} 门课程</span>
+      </div>
+      
+      <!-- 桌面端：表格视图 -->
+      <div class="table-view">
+        <el-table 
+          :data="processedCourses" 
+          border 
+          stripe 
+          style="width: 100%" 
+          v-loading="loading"
+        >
+          <el-table-column prop="name" label="课程名称" min-width="200" align="left"></el-table-column>
+          <el-table-column prop="semester" label="学期" min-width="100"></el-table-column>
+          <el-table-column prop="credit" label="学分" width="80"></el-table-column>
+          <el-table-column prop="status" label="课程状态">
+            <template #default="{ row }">
+              <el-tag 
+                :type="row.status === 'PUBLISHED' ? 'success' : 
+                      row.status === 'DRAFT' ? 'warning' : 
+                      row.status === 'PENDING_REVIEW' ? 'info' : 'danger'"
+              >
+                {{ row.status === 'PUBLISHED' ? '已发布' : 
+                   row.status === 'DRAFT' ? '草稿' : 
+                   row.status === 'PENDING_REVIEW' ? '待审核' : '已归档' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="metrics.enrolledCount" label="选课人数" width="120">
+            <template #default="{ row }">
+              {{ row.metrics.enrolledCount }}/{{ row.enrollLimit }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="metrics.modules" label="模块数" width="80"></el-table-column>
+          <el-table-column prop="metrics.assignments" label="作业数" width="80"></el-table-column>
+          <el-table-column prop="isEnrolled" label="选课状态">
+            <template #default="{ row }">
+              <el-tag :type="row.isEnrolled ? 'success' : 'info'">
+                {{ row.isEnrolled ? '已选' : '未选' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" min-width="120" fixed="right">
+            <template #default="{ row }">
+              <el-button 
+                v-if="row.isEnrolled" 
+                type="danger" 
+                size="small" 
+                @click="dropCourse(row)"
+              >
+                退课
+              </el-button>
+              <el-button 
+                v-else 
+                type="success" 
+                size="small" 
+                :disabled="row.metrics.enrolledCount >= row.enrollLimit || row.status !== 'PUBLISHED'"
+                @click="enrollCourse(row)"
+              >
+                选课
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      
+      <!-- 移动端：卡片视图 -->
+      <div class="card-view">
+        <div v-loading="loading">
+          <el-empty v-if="!loading && processedCourses.length === 0" description="暂无课程" />
+          <ContentGrid v-else min-width="300px" gap="md" :columns="{ xs: 1, sm: 1, md: 2, lg: 3 }">
+            <el-card
+              v-for="course in processedCourses"
+              :key="course.id"
+              class="course-card"
+              shadow="hover"
             >
-          </div>
-          <div class="filter-options">
-            <select v-model="selectedStatus" @change="handleSearch">
-              <option value="">全部</option>
-              <option value="PUBLISHED">已发布</option>
-              <option value="DRAFT">草稿</option>
-              <option value="PENDING_REVIEW">待审核</option>
-              <option value="ARCHIVED">已归档</option>
-            </select>
-            <input 
-              type="text" 
-              v-model="selectedTeacherId"
-              placeholder="教师ID"
-              @input="handleSearch"
-            >
-          </div>
-        </div>
-        
-        <!-- 课程列表 -->
-        <div class="courses-section">
-          <div class="section-title">
-            <h2>课程列表</h2>
-            <span class="total-count">共 {{ total }} 门课程</span>
-          </div>
-          
-          <el-table 
-            :data="processedCourses" 
-            border 
-            stripe 
-            style="width: 100%" 
-            v-loading="loading"
-          >
-            <el-table-column prop="name" label="课程名称" min-width="200" align="left"></el-table-column>
-            <el-table-column prop="semester" label="学期" min-width="100"></el-table-column>
-            <el-table-column prop="credit" label="学分" width="80"></el-table-column>
-            <el-table-column prop="status" label="课程状态">
-              <template #default="{ row }">
+              <div class="course-card-header">
+                <h3 class="course-name">{{ course.name }}</h3>
                 <el-tag 
-                  :type="row.status === 'PUBLISHED' ? 'success' : 
-                        row.status === 'DRAFT' ? 'warning' : 
-                        row.status === 'PENDING_REVIEW' ? 'info' : 'danger'"
+                  :type="course.status === 'PUBLISHED' ? 'success' : 
+                        course.status === 'DRAFT' ? 'warning' : 
+                        course.status === 'PENDING_REVIEW' ? 'info' : 'danger'"
+                  size="small"
                 >
-                  {{ row.status === 'PUBLISHED' ? '已发布' : 
-                     row.status === 'DRAFT' ? '草稿' : 
-                     row.status === 'PENDING_REVIEW' ? '待审核' : '已归档' }}
+                  {{ course.status === 'PUBLISHED' ? '已发布' : 
+                     course.status === 'DRAFT' ? '草稿' : 
+                     course.status === 'PENDING_REVIEW' ? '待审核' : '已归档' }}
                 </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="metrics.enrolledCount" label="选课人数" width="120">
-              <template #default="{ row }">
-                {{ row.metrics.enrolledCount }}/{{ row.enrollLimit }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="metrics.modules" label="模块数" width="80"></el-table-column>
-            <el-table-column prop="metrics.assignments" label="作业数" width="80"></el-table-column>
-            <el-table-column prop="isEnrolled" label="选课状态">
-              <template #default="{ row }">
-                <el-tag :type="row.isEnrolled ? 'success' : 'info'">
-                  {{ row.isEnrolled ? '已选' : '未选' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" min-width="120" fixed="right">
-              <template #default="{ row }">
+              </div>
+              
+              <div class="course-card-info">
+                <div class="info-row">
+                  <span class="info-label">学期：</span>
+                  <span class="info-value">{{ course.semester }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">学分：</span>
+                  <span class="info-value">{{ course.credit }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">选课人数：</span>
+                  <span class="info-value">{{ course.metrics.enrolledCount }}/{{ course.enrollLimit }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">模块数：</span>
+                  <span class="info-value">{{ course.metrics.modules }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">作业数：</span>
+                  <span class="info-value">{{ course.metrics.assignments }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">选课状态：</span>
+                  <el-tag :type="course.isEnrolled ? 'success' : 'info'" size="small">
+                    {{ course.isEnrolled ? '已选' : '未选' }}
+                  </el-tag>
+                </div>
+              </div>
+              
+              <div class="course-card-actions">
                 <el-button 
-                  v-if="row.isEnrolled" 
+                  v-if="course.isEnrolled" 
                   type="danger" 
                   size="small" 
-                  @click="dropCourse(row)"
+                  @click="dropCourse(course)"
+                  style="width: 100%"
                 >
                   退课
                 </el-button>
@@ -343,321 +355,184 @@ const handlePageChange = (newPage: number) => {
                   v-else 
                   type="success" 
                   size="small" 
-                  :disabled="row.metrics.enrolledCount >= row.enrollLimit || row.status !== 'PUBLISHED'"
-                  @click="enrollCourse(row)"
+                  :disabled="course.metrics.enrolledCount >= course.enrollLimit || course.status !== 'PUBLISHED'"
+                  @click="enrollCourse(course)"
+                  style="width: 100%"
                 >
                   选课
                 </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          
-          <!-- 分页 -->
-          <div class="pagination">
-            <button 
-              class="page-btn" 
-              :disabled="page <= 1"
-              @click="handlePageChange(page - 1)"
-            >
-              上一页
-            </button>
-            <span class="page-info">第 {{ page }} 页 / 共 {{ Math.ceil(total / pageSize) }} 页</span>
-            <button 
-              class="page-btn" 
-              :disabled="page * pageSize >= total"
-              @click="handlePageChange(page + 1)"
-            >
-              下一页
-            </button>
-          </div>
+              </div>
+            </el-card>
+          </ContentGrid>
         </div>
       </div>
+      
+      <!-- 分页 -->
+      <div class="pagination">
+        <button 
+          class="page-btn" 
+          :disabled="page <= 1"
+          @click="handlePageChange(page - 1)"
+        >
+          上一页
+        </button>
+        <span class="page-info">第 {{ page }} 页 / 共 {{ Math.ceil(total / pageSize) }} 页</span>
+        <button 
+          class="page-btn" 
+          :disabled="page * pageSize >= total"
+          @click="handlePageChange(page + 1)"
+        >
+          下一页
+        </button>
+      </div>
     </div>
-  </div>
+  </PageContainer>
 </template>
+
 <style scoped>
-
-/* 右侧主内容 - 关键修改 */
-.main-content {
-  flex: 1;
-  margin-left: 2px;
-  display: flex;
-  flex-direction: column;
-  width: 100%; /* 移除calc，改为100%，由flex控制宽度 */
-  overflow-x: hidden; /* 禁止主内容横向滚动 */
-}
-
-
-.main-content .header {
-  background-color: white;
-  color: #333;
-  padding: 15px 30px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-}
-
-.header-left .hamburger {
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  cursor: pointer;
-}
-
-.header-left .hamburger span {
-  width: 25px;
-  height: 3px;
-  background-color: #333;
-  border-radius: 2px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.user-info {
-  text-align: right;
-}
-
-.user-info .username {
-  display: block;
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
-.user-info .email {
-  display: block;
-  font-size: 0.9rem;
-  opacity: 0.7;
-}
-
-.content {
-  margin-left: 160px;
-  padding: 30px;
-  /* 移除max-width，或保留但增加overflow-x: hidden */
-  width: 88%;
-  box-sizing: border-box; /* 确保padding不超出宽度 */
-  overflow-x: hidden; /* 禁止内容区横向滚动 */
-}
-
 /* 搜索和筛选 */
 .filter-section {
-  background-color: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-  margin-bottom: 30px;
+  background-color: var(--bg-primary);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-8);
   display: flex;
-  gap: 20px;
+  gap: var(--space-4);
   align-items: center;
   flex-wrap: wrap;
 }
 
 .search-box input {
-  padding: 12px 20px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   width: 300px;
   outline: none;
-  transition: border-color 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
 .search-box input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .filter-options {
   display: flex;
-  gap: 15px;
+  gap: var(--space-4);
   align-items: center;
   flex-wrap: wrap;
 }
 
-.filter-options select, .filter-options input {
-  padding: 12px 15px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 0.95rem;
+.filter-options select, 
+.filter-options input {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   outline: none;
-  transition: border-color 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
-.filter-options select:focus, .filter-options input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+.filter-options select:focus, 
+.filter-options input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 /* 课程列表 */
 .courses-section {
-  background-color: white;
-  padding: 30px;
-  border-radius: 12px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-  overflow-x: auto; /* 表格超出时纵向滚动，而非页面整体滑动 */
-  max-width: 100%; /* 限制表格容器宽度 */
+  background-color: var(--bg-primary);
+  padding: var(--space-8);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-8);
 }
-
-
 
 .section-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--gray-200);
 }
 
 .section-title h2 {
-  color: #333;
-  font-size: 1.8rem;
+  color: var(--text-primary);
+  font-size: 1.75rem;
+  font-weight: 700;
   margin: 0;
 }
 
 .total-count {
-  color: #666;
-  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
-.courses-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 25px;
-  margin-bottom: 30px;
+/* 桌面端表格视图 */
+.table-view {
+  display: block;
+}
+
+/* 移动端卡片视图 */
+.card-view {
+  display: none;
 }
 
 .course-card {
-  background-color: white;
-  border-radius: 12px;
-  border: 1px solid #e0e0e0;
-  padding: 25px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  cursor: pointer;
+  transition: all var(--transition-base);
 }
 
 .course-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
-.course-header {
+.course-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  margin-bottom: var(--space-4);
+  gap: var(--space-2);
 }
 
 .course-name {
-  color: #333;
-  font-size: 1.3rem;
-  margin: 0;
+  font-size: 1.2rem;
   font-weight: 600;
-}
-
-.course-status {
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.status-PUBLISHED {
-  background-color: rgba(76, 175, 80, 0.1);
-  color: #4caf50;
-}
-
-.status-DRAFT {
-  background-color: rgba(255, 152, 0, 0.1);
-  color: #ff9800;
-}
-
-.status-PENDING_REVIEW {
-  background-color: rgba(255, 235, 59, 0.1);
-  color: #ffeb3b;
-}
-
-.status-ARCHIVED {
-  background-color: rgba(158, 158, 158, 0.1);
-  color: #9e9e9e;
-}
-
-.course-description {
-  color: #666;
-  font-size: 0.95rem;
+  color: var(--text-primary);
   margin: 0;
-  line-height: 1.5;
+  flex: 1;
 }
 
-.course-metrics {
+.course-card-info {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #f0f0f0;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
-.metric-item {
+.info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
-.metric-label {
-  color: #666;
+.info-label {
+  color: var(--text-secondary);
 }
 
-.metric-value {
-  color: #333;
+.info-value {
+  color: var(--text-primary);
   font-weight: 500;
 }
 
-.course-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: auto;
-}
-
-.action-btn {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.enroll-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.enroll-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.enroll-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.drop-btn {
-  background-color: #f44336;
-  color: white;
-}
-
-.drop-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+.course-card-actions {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--gray-200);
 }
 
 /* 分页 */
@@ -665,54 +540,27 @@ const handlePageChange = (newPage: number) => {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px;
-  margin-top: 30px;
-}
-
-.pagination button {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  background-color: white;
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-}
-
-.pagination button:hover:not(:disabled) {
-  background-color: #667eea;
-  color: white;
-  border-color: #667eea;
-}
-
-.pagination button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.pagination button.active {
-  background-color: #667eea;
-  color: white;
-  border-color: #667eea;
-  font-weight: 600;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  flex-wrap: wrap;
 }
 
 .page-btn {
-  padding: 10px 20px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background-color: white;
-  color: #333;
-  font-size: 0.95rem;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
 .page-btn:hover:not(:disabled) {
-  background-color: #667eea;
+  background-color: var(--primary);
   color: white;
-  border-color: #667eea;
+  border-color: var(--primary);
 }
 
 .page-btn:disabled {
@@ -721,33 +569,18 @@ const handlePageChange = (newPage: number) => {
 }
 
 .page-info {
-  color: #666;
-  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 /* 响应式设计 */
-@media (max-width: 768px) {
-  .sidebar {
-    width: 100%;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
+@media (max-width: 1024px) {
+  .table-view {
+    display: none;
   }
   
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  
-  .main-content {
-    margin-left: 0;
-    width: 100vw;
-  }
-  
-  .header-left .hamburger {
-    display: flex;
-  }
-  
-  .content {
-    padding: 15px;
+  .card-view {
+    display: block;
   }
   
   .filter-section {
@@ -759,8 +592,62 @@ const handlePageChange = (newPage: number) => {
     width: 100%;
   }
   
-  .courses-grid {
-    grid-template-columns: 1fr;
+  .filter-options {
+    width: 100%;
+  }
+  
+  .filter-options select,
+  .filter-options input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .courses-section {
+    padding: var(--space-5);
+  }
+  
+  .section-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+  
+  .section-title h2 {
+    font-size: 1.5rem;
+  }
+  
+  .filter-section {
+    padding: var(--space-4);
+  }
+  
+  .pagination {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  
+  .page-btn {
+    width: 100%;
+  }
+  
+  .page-info {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .courses-section {
+    padding: var(--space-4);
+  }
+  
+  .section-title h2 {
+    font-size: 1.25rem;
+  }
+  
+  .course-name {
+    font-size: 1.1rem;
   }
 }
 </style>

@@ -1,10 +1,5 @@
 <template>
-  <div class="student-course-assignments">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-      <div class="content">
+  <div class="student-course-assignments-page">
         <!-- 页面标题 -->
         <div class="page-header">
           <div class="header-actions">
@@ -116,7 +111,7 @@
                       <span class="meta-label">附件数:</span>
                       <span class="meta-value">{{ getSubmissionByAssignmentId(assignment.id)?.attachments.length || 0 }}</span>
                     </div>
-                    <div class="meta-item" v-if="getSubmissionByAssignmentId(assignment.id)?.resubmitCount > 0">
+                    <div class="meta-item" v-if="(getSubmissionByAssignmentId(assignment.id)?.resubmitCount || 0) > 0">
                       <span class="meta-icon">🔄</span>
                       <span class="meta-label">重提交次数:</span>
                       <span class="meta-value">{{ getSubmissionByAssignmentId(assignment.id)?.resubmitCount }}/{{ assignment.maxResubmit }}</span>
@@ -152,8 +147,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
     
     <!-- 申诉弹窗 -->
     <div v-if="showAppealModal" class="modal-overlay" @click="closeAppealModal">
@@ -215,7 +208,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -354,13 +346,6 @@ const checkAuth = () => {
     return false
   }
   return true
-}
-
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  router.push('/student')
 }
 
 // 返回上一页
@@ -1310,11 +1295,6 @@ onMounted(async () => {
 
 /* 响应式设计 */
 @media (max-width: 1024px) {
-  .main-content {
-    margin-left: 0;
-    width: 100vw;
-  }
-  
   .assignment-meta {
     flex-direction: column;
     align-items: flex-start;
@@ -1323,9 +1303,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .content {
-    padding: 20px;
-  }
   
   .filter-container {
     flex-direction: column;

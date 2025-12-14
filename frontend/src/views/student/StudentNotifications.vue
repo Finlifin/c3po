@@ -2,7 +2,6 @@
 import router from '../../router'
 import axios from 'axios'
 import { onMounted, ref } from 'vue'
-import StudentSidebar from '../../components/StudentSidebar.vue'
 import { ElTable, ElTableColumn, ElSelect, ElOption, ElPagination } from 'element-plus'
 
 // User data
@@ -151,30 +150,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="student-notifications">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="notifications" />
+  <div class="student-notifications-page">
+    <div class="page-header">
+      <h1>通知中心</h1>
+    </div>
 
-    <!-- 右侧主内容 -->
-    <div class="main-content">
-      <div class="header">
-        <div class="header-left">
-          <div class="hamburger">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <h1>通知中心</h1>
-        </div>
-        <div class="header-right">
-          <div class="user-info">
-            <div class="avatar">{{ user?.username.charAt(0) }}</div>
-            <span class="username">{{ user?.username }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="content">
+    <div class="content">
         <!-- 筛选和搜索 -->
         <div class="filter-section">
           <el-select 
@@ -269,217 +250,83 @@ onMounted(async () => {
             @current-change="handlePageChange"
           ></el-pagination>
         </div>
-      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.student-notifications {
-  width: 100vw;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  display: flex;
-  overflow-x: hidden;
+.student-notifications-page {
+  padding: var(--space-6);
 }
 
-
-
-/* 右侧主内容 */
-.main-content {
-  flex: 1;
-  margin-left: 20px;
-  display: flex;
-  flex-direction: column;
-  width: 40%;
-  overflow-x: hidden;
+.page-header {
+  margin-bottom: var(--space-6);
 }
 
-.header {
-  background-color: white;
-  color: black;
-  padding: 15px 30px;
-  margin-left: 30px;
-  display: flex;
-  justify-content: space-between;
- 
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+.page-header h1 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
 }
 
-.header-left .hamburger {
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  cursor: pointer;
-}
-
-.header-left .hamburger span {
-  width: 25px;
-  height: 3px;
-  background-color: #333;
-  border-radius: 2px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-}
-
-.avatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: 600;
-  margin-right: 10px;
-}
-
-.user-info .username {
-  display: block;
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
-/* 内容区域 */
-.content {
-  padding: 30px;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* 筛选区域 */
 .filter-section {
-  background-color: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-  margin-bottom: 30px;
+  background-color: var(--bg-primary);
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-6);
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--space-4);
 }
 
-/* 通知列表 */
+.notifications-section {
+  background-color: var(--bg-primary);
+  padding: var(--space-8);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
 .notifications-section h2 {
-  color: #333;
-  font-size: 1.8rem;
-  margin-bottom: 20px;
+  color: var(--text-primary);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  margin: 0 0 var(--space-6) 0;
 }
 
-.loading, .empty-notifications {
+.loading, 
+.empty-notifications {
   text-align: center;
-  padding: 40px 20px;
-  color: #666;
-  font-size: 1rem;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+  padding: var(--space-10);
+  color: var(--text-secondary);
 }
 
 .error-message {
   background-color: rgba(231, 76, 60, 0.1);
-  color: #e74c3c;
-  padding: 15px;
-  border-radius: 8px;
-  border-left: 4px solid #e74c3c;
-  margin-bottom: 20px;
-}
-
-/* 表格样式 */
-.notifications-section :deep(.el-table) {
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
-}
-
-.notifications-section :deep(.el-table__header-wrapper) {
-  border-radius: 12px 12px 0 0;
-}
-
-.notifications-section :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
+  color: var(--error);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--error);
+  margin-bottom: var(--space-5);
 }
 
 .table-content {
-  max-width: 500px;
-  white-space: normal;
-  line-height: 1.5;
+  max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
 }
 
-/* 分页 */
 .pagination {
+  margin-top: var(--space-8);
   display: flex;
   justify-content: center;
-  align-items: center;
-  margin-top: 30px;
-  padding: 20px;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
 }
 
-.pagination :deep(.el-pagination) {
-  margin: 0;
-}
-
-/* 空状态 */
-.empty-notifications :deep(.el-empty) {
-  margin: 40px 0;
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
-  .main-content {
-    margin-left: 60px;
-    width: calc(100vw - 60px);
-  }
-  
-  .header {
-    flex-direction: column;
-    gap: 15px;
-    padding: 15px;
-  }
-  
-  .header-left, .header-right {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .content {
-    padding: 15px;
-  }
-  
-  .filter-group {
-    display: block;
-    margin-right: 0;
-    margin-bottom: 20px;
-  }
-  
-  .notification-header {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .notification-meta {
-    flex-direction: column;
-    gap: 10px;
+  .student-notifications-page {
+    padding: var(--space-4);
   }
 }
 </style>

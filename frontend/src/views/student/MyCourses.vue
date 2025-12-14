@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import router from '../../router'
-import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
+import { studentApi } from '../../api/student'
+import PageContainer from '../../components/layout/PageContainer.vue'
+import ContentGrid from '../../components/layout/ContentGrid.vue'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+// User data
+const user = computed(() => authStore.user)
 
 // 学生课程响应数据类型
 interface StudentCourseResponse {
@@ -16,97 +24,27 @@ interface StudentCourseResponse {
   totalAssignments: number
 }
 
-// 用户信息类型
-interface UserInfo {
-  id: string
-  username: string
-  role: string
-}
-
 // 状态变量
 const courses = ref<StudentCourseResponse[]>([])
-const userInfo = ref<UserInfo | null>(null)
 const loading = ref(false)
 const error = ref('')
 
-// API配置
-const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
-
-// 获取token
-const getToken = () => {
-  return localStorage.getItem('Stoken')
-}
-
-// 检查token有效性
-const checkAuth = () => {
-  const token = getToken()
-  console.log('检查认证状态，token存在:', !!token)
-  if (!token) {
-    // 在开发环境下不自动跳转，便于调试
-    if (import.meta.env.DEV) {
-      console.log('开发环境：未找到token，但不跳转')
-      return false
-    }
-    router.push('/student')
-    return false
-  }
-  return true
-}
-
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  router.push('/student')
-}
-
-// 获取用户信息
-const fetchUserInfo = async () => {
-  if (!checkAuth()) return
-  
-  try {
-    const token = getToken()
-    const response = await axios.get(`${API_BASE_URL}/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-    // 直接使用response.data获取用户信息，无需嵌套的data属性
-    userInfo.value = response.data
-    return userInfo.value
-  } catch (err: any) {
-    console.error('Failed to fetch user info:', err)
-    error.value = '获取用户信息失败'
-    return null
-  }
-}
-
 // 获取学生已选课程
 const fetchEnrolledCourses = async () => {
-  const isAuthenticated = checkAuth()
-  console.log('开始获取课程数据，认证状态:', isAuthenticated)
-  
   loading.value = true
   error.value = ''
   
   try {
-    // 先获取用户信息以获取studentId
-    const user = await fetchUserInfo()
-    if (!user) {
-      // 无法获取用户信息，直接抛出错误
+    if (!user.value?.id) {
+      await authStore.fetchUserInfo()
+    }
+    
+    if (!user.value?.id) {
       throw new Error('无法获取用户信息')
     }
     
-    const token = getToken()
-    console.log('准备发送API请求:', `${API_BASE_URL}/students/${user.id}/courses`)
-    const response = await axios.get(`${API_BASE_URL}/students/${user.id}/courses`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    const response = await studentApi.getMyCourses(user.value.id)
     
-    // 检查响应数据格式，确保能正确提取课程数组
-    console.log('API请求成功，返回数据:', response.data)
     let courseData: StudentCourseResponse[] = []
     
     // 如果response.data本身是数组，直接使用
@@ -132,7 +70,6 @@ const fetchEnrolledCourses = async () => {
     console.error('Failed to fetch enrolled courses:', err)
   } finally {
     loading.value = false
-    console.log('获取课程数据完成，加载状态:', loading.value)
   }
 }
 
@@ -188,47 +125,44 @@ const getStatusText = (status: string): string => {
       return status
   }
 }
+
 </script>
 
 <template>
-  <div class="my-courses">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-      <div class="content">
-        <!-- 页面标题 -->
-        <div class="page-header">
-          <h1>我的课程</h1>
-          <p v-if="userInfo">
-            欢迎，{{ userInfo.username }}！以下是您当前选修的课程列表。
-          </p>
-        </div>
-        <!-- 加载状态和错误提示 -->
-        <div v-if="loading" class="loading-state">
-          <div class="loading-spinner"></div>
-          <p>正在加载课程信息...</p>
-        </div>
-        <div v-else-if="error" class="error-state">
-          <div class="error-icon">⚠️</div>
-          <p class="error-message">{{ error }}</p>
-          <button class="retry-btn" @click="fetchEnrolledCourses">重新加载</button>
-        </div>
-        <!-- 课程列表 -->
-        <div v-else-if="courses.length === 0" class="empty-state">
-          <div class="empty-icon">📚</div>
-          <h3>暂无选修课程</h3>
-          <p>您还没有选修任何课程，请前往选课页面浏览并选择课程。</p>
-          <button class="go-selection-btn" @click="router.push('/student/course-selection')">
-            去选课
-          </button>
-        </div>
-        <div v-else class="courses-container">
-          <div 
-            v-for="course in courses" 
-            :key="course.courseId"
-            class="course-card"
-          >
+  <PageContainer>
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>我的课程</h1>
+      <p v-if="user">
+        欢迎，{{ user.username }}！以下是您当前选修的课程列表。
+      </p>
+    </div>
+    <!-- 加载状态和错误提示 -->
+    <div v-if="loading" class="loading-state">
+      <div class="loading-spinner"></div>
+      <p>正在加载课程信息...</p>
+    </div>
+    <div v-else-if="error" class="error-state">
+      <div class="error-icon">⚠️</div>
+      <p class="error-message">{{ error }}</p>
+      <button class="retry-btn" @click="fetchEnrolledCourses">重新加载</button>
+    </div>
+    <!-- 课程列表 -->
+    <div v-else-if="courses.length === 0" class="empty-state">
+      <div class="empty-icon">📚</div>
+      <h3>暂无选修课程</h3>
+      <p>您还没有选修任何课程，请前往选课页面浏览并选择课程。</p>
+      <button class="go-selection-btn" @click="router.push('/student/course-selection')">
+        去选课
+      </button>
+    </div>
+    <ContentGrid v-else min-width="350px" gap="md" :columns="{ xs: 1, sm: 1, md: 2, lg: 3 }">
+      <el-card
+        v-for="course in courses" 
+        :key="course.courseId"
+        class="course-card"
+        shadow="hover"
+      >
             <div class="course-header">
               <h3 class="course-name">{{ course.name }}</h3>
               <span :class="['course-status', getStatusClass(course.status)]">
@@ -291,54 +225,27 @@ const getStatusText = (status: string): string => {
                 查看作业/测试
               </button>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+          </el-card>
+    </ContentGrid>
+  </PageContainer>
 </template>
 
 <style scoped>
-.my-courses {
-  width: 114%;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  display: flex;
-  overflow: hidden;
-}
-
-/* 右侧主内容 */
-.main-content {
-  flex: 1;
-  margin-left: 120px; /* 与侧边栏宽度一致 */
-  display: flex;
-  flex-direction: column;
-  width: calc(100vw - 280px);
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
-.content {
-  padding: 30px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
 /* 页面标题 */
 .page-header {
-  margin-bottom: 30px;
+  margin-bottom: var(--space-8);
 }
 
 .page-header h1 {
   font-size: 2rem;
-  color: #333;
-  margin: 0 0 10px 0;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
   font-weight: 700;
 }
 
 .page-header p {
-  font-size: 1.1rem;
-  color: #666;
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -348,18 +255,21 @@ const getStatusText = (status: string): string => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: var(--space-16) var(--space-5);
   text-align: center;
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  border: 4px solid var(--gray-200);
+  border-top: 4px solid var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 15px;
+  margin-bottom: var(--space-4);
 }
 
 @keyframes spin {
@@ -373,37 +283,39 @@ const getStatusText = (status: string): string => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: var(--space-16) var(--space-5);
   text-align: center;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
 }
 
 .error-icon {
   font-size: 3rem;
-  margin-bottom: 15px;
+  margin-bottom: var(--space-4);
 }
 
 .error-message {
-  font-size: 1.1rem;
-  color: #e74c3c;
-  margin-bottom: 20px;
+  font-size: var(--text-lg);
+  color: var(--error);
+  margin-bottom: var(--space-5);
 }
 
 .retry-btn {
-  padding: 10px 20px;
-  background-color: #667eea;
+  padding: var(--space-3) var(--space-5);
+  background-color: var(--primary);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
 .retry-btn:hover {
-  background-color: #5568d3;
+  background-color: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* 空状态 */
@@ -412,82 +324,73 @@ const getStatusText = (status: string): string => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: var(--space-16) var(--space-5);
   text-align: center;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
 }
 
 .empty-icon {
   font-size: 4rem;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .empty-state h3 {
   font-size: 1.5rem;
-  color: #333;
-  margin: 0 0 10px 0;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
 }
 
 .empty-state p {
-  font-size: 1.1rem;
-  color: #666;
-  margin: 0 0 20px 0;
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-5) 0;
   max-width: 500px;
 }
 
 .go-selection-btn {
-  padding: 12px 24px;
-  background-color: #667eea;
+  padding: var(--space-3) var(--space-6);
+  background-color: var(--primary);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
 .go-selection-btn:hover {
-  background-color: #5568d3;
-}
-
-/* 课程容器 */
-.courses-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 25px;
+  background-color: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* 课程卡片 */
 .course-card {
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-  transition: all 0.3s ease;
+  transition: all var(--transition-base);
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 .course-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .course-header {
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--gray-200);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
 }
 
 .course-name {
   font-size: 1.3rem;
-  color: #333;
+  color: var(--text-primary);
   margin: 0;
   font-weight: 600;
   flex: 1;
@@ -521,11 +424,11 @@ const getStatusText = (status: string): string => {
 }
 
 .course-body {
-  padding: 20px;
+  padding: var(--space-5);
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 .course-meta {
@@ -546,12 +449,12 @@ const getStatusText = (status: string): string => {
 }
 
 .meta-label {
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .meta-value {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .assignment-stats {
@@ -630,100 +533,101 @@ const getStatusText = (status: string): string => {
 }
 
 .rate-text {
-  font-size: 0.9rem;
-  color: #666;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .course-footer {
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
+  padding: var(--space-5);
+  border-top: 1px solid var(--gray-200);
   display: flex;
   justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .learn-btn {
-  padding: 10px 24px;
-  background-color: #667eea;
+  padding: var(--space-3) var(--space-6);
+  background-color: var(--primary);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
-  margin-right: 10px;
+  transition: all var(--transition-fast);
 }
 
 .learn-btn:hover:not(:disabled) {
-  background-color: #5568d3;
+  background-color: var(--primary-dark);
   transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .learn-btn:disabled {
-  background-color: #9e9e9e;
+  background-color: var(--gray-400);
   cursor: not-allowed;
   transform: none;
 }
 
 .assignments-btn {
-  padding: 10px 24px;
-  background-color: #4caf50;
+  padding: var(--space-3) var(--space-6);
+  background-color: var(--success);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
 .assignments-btn:hover:not(:disabled) {
-  background-color: #43a047;
+  background-color: #0ea571;
   transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .assignments-btn:disabled {
-  background-color: #9e9e9e;
+  background-color: var(--gray-400);
   cursor: not-allowed;
   transform: none;
 }
 
-/* 响应式设计 */
-@media (max-width: 1024px) {
-  .courses-container {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  }
+/* 自定义Element Plus样式 */
+:deep(.el-card) {
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: var(--shadow-md);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
+/* 响应式设计 */
 @media (max-width: 768px) {
-  .main-content {
-    margin-left: 0;
-    width: 100%;
-  }
-  
-  .content {
-    padding: 15px;
-  }
-  
   .page-header h1 {
-    font-size: 1.8rem;
-  }
-  
-  .courses-container {
-    grid-template-columns: 1fr;
-    gap: 20px;
+    font-size: 1.5rem;
   }
   
   .course-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--space-2);
   }
   
   .stats-row {
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-2);
+  }
+  
+  .course-footer {
+    flex-direction: column;
+  }
+  
+  .learn-btn,
+  .assignments-btn {
+    width: 100%;
   }
 }
 </style>

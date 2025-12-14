@@ -78,7 +78,7 @@ public class AdminUserController {
             @RequestParam(name = "sort", required = false) String sort) {
 
         Pageable pageable = buildPageable(page, pageSize, sort);
-        Specification<UserAccount> specification = Specification.where(null);
+        Specification<UserAccount> specification = (root, query, cb) -> cb.conjunction();
 
         if (role != null) {
             specification = specification.and((root, query, cb) -> cb.equal(root.get("role"), role));
@@ -263,7 +263,8 @@ public class AdminUserController {
         if (request.getStatus() != null) {
             String reason = normalizeReason(request.getStatusReason());
             if (request.getStatus() != UserStatus.ACTIVE && !StringUtils.hasText(reason)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reason is required when status is not ACTIVE");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "reason is required when status is not ACTIVE");
             }
             if (request.getStatus() != user.getStatus()) {
                 user.setStatus(request.getStatus());
@@ -339,7 +340,8 @@ public class AdminUserController {
                 .build();
     }
 
-    private AdminUserResponse toResponse(UserAccount user, StudentProfile studentProfile, TeacherProfile teacherProfile) {
+    private AdminUserResponse toResponse(UserAccount user, StudentProfile studentProfile,
+            TeacherProfile teacherProfile) {
         StudentProfileSummary studentSummary = null;
         if (studentProfile != null) {
             studentSummary = StudentProfileSummary.builder()
@@ -400,13 +402,13 @@ public class AdminUserController {
     }
 
     private String validatePayload(BulkCreateUsersRequest.CreateUserPayload payload,
-                                   UserRole role,
-                                   UserStatus status,
-                                   String statusReason,
-                                   Set<String> usernameSet,
-                                   Set<String> emailSet,
-                                   String normalizedUsername,
-                                   String normalizedEmail) {
+            UserRole role,
+            UserStatus status,
+            String statusReason,
+            Set<String> usernameSet,
+            Set<String> emailSet,
+            String normalizedUsername,
+            String normalizedEmail) {
         if (usernameSet.contains(normalizedUsername)) {
             return "Duplicate username in request";
         }
@@ -446,5 +448,3 @@ public class AdminUserController {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 }
-
-

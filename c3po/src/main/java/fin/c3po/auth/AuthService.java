@@ -87,6 +87,7 @@ public class AuthService {
                 .email(userAccount.getEmail())
                 .role(userAccount.getRole())
                 .status(userAccount.getStatus())
+                .avatarUrl(userAccount.getAvatarUrl())
                 .createdAt(userAccount.getCreatedAt())
                 .updatedAt(userAccount.getUpdatedAt())
                 .build();

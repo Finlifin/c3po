@@ -52,6 +52,9 @@ public class UserAccount implements UserDetails {
     @Column(length = 512)
     private String statusReason;
 
+    @Column(length = 512)
+    private String avatarUrl;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -92,5 +95,3 @@ public class UserAccount implements UserDetails {
         return status == UserStatus.ACTIVE;
     }
 }
-
-

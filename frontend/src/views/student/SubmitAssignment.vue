@@ -1,12 +1,7 @@
 <template>
-  <div class="submit-assignment">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-      <div class="content">
-        <!-- 页面标题 -->
-        <div class="page-header">
+  <div class="submit-assignment-page">
+    <!-- 页面标题 -->
+    <div class="page-header">
           <div class="header-actions">
             <button class="back-btn" @click="goBack">
               ← 返回作业列表
@@ -130,8 +125,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -139,7 +132,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -200,13 +192,6 @@ const checkAuth = () => {
     return false
   }
   return true
-}
-
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('Stoken')
-  localStorage.removeItem('user')
-  router.push('/student')
 }
 
 // 返回上一页
@@ -797,11 +782,6 @@ onMounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 1024px) {
-  .main-content {
-    margin-left: 0;
-    width: 100vw;
-  }
-  
   .info-meta {
     flex-direction: column;
     align-items: flex-start;
@@ -810,9 +790,6 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .content {
-    padding: 20px;
-  }
   
   .info-header {
     flex-direction: column;

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import router from '../../router'
 import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
 import { onMounted, ref, watch } from 'vue'
 
 // 资源数据类型定义
@@ -45,7 +44,7 @@ const course = ref<Course | null>(null)
 // courseStats 状态变量已删除
 const loading = ref(false)
 const error = ref('')
-const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
+// const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 
 // API配置
 const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
@@ -63,13 +62,6 @@ const checkAuth = () => {
     return false
   }
   return true
-}
-
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('Stoken')
-  localStorage.removeItem('user')
-  router.push('/student')
 }
 
 // 获取课程章节及资源
@@ -157,14 +149,7 @@ const downloadResource = (resource: Resource) => {
 </script>
 
 <template>
-  <div class="course-resources">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-    
-      
-      <div class="content">
+  <div class="course-resources-page">
         <!-- 课程信息卡片 -->
         <div class="course-info-card">
           <div class="course-info-item">
@@ -255,37 +240,12 @@ const downloadResource = (resource: Resource) => {
             </div>
           </div>
         </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <style scoped>
-.course-resources {
-  width: 113%;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  display: flex;
-  overflow: hidden;
-}
-
-/* 右侧主内容 */
-.main-content {
-  flex: 1;
-  margin-left: 210px; /* 与侧边栏宽度一致 */
-  display: flex;
-  flex-direction: column;
-  width: calc(100vw - 280px);
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
-.content {
-  padding: 30px;
-   max-width: 80%; /* 取消最大宽度限制，让内容占满主区域 */
-  margin: 0; /* 去掉自动居中的外边距 */
-  width: 80%;
-  box-sizing: border-box;
+.course-resources-page {
+  padding: var(--space-6);
 }
 
 /* 课程信息卡片 */
