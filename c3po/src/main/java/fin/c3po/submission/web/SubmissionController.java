@@ -12,6 +12,7 @@ import fin.c3po.submission.Submission;
 import fin.c3po.submission.SubmissionRepository;
 import fin.c3po.submission.SubmissionStatus;
 import fin.c3po.submission.dto.AppealSubmissionRequest;
+import fin.c3po.submission.dto.BatchGradeSubmissionRequest;
 import fin.c3po.submission.dto.CreateSubmissionRequest;
 import fin.c3po.submission.dto.GradeSubmissionRequest;
 import fin.c3po.submission.dto.SubmissionResponse;
@@ -220,6 +221,78 @@ public class SubmissionController {
         submission.setAppealedAt(null);
         Submission saved = submissionRepository.save(submission);
         return ApiResponse.success(toResponse(saved));
+    }
+
+    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @PostMapping("/assignments/{assignmentId}/submissions/batch-grade")
+    public ApiResponse<List<SubmissionResponse>> batchGradeSubmissions(
+            @PathVariable UUID assignmentId,
+            @Valid @RequestBody BatchGradeSubmissionRequest request,
+            @AuthenticationPrincipal UserAccount currentUser) {
+
+        Assignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
+        ensureCourseAccess(currentUser, assignment.getCourseId());
+
+        // 收集所有需要评分的submission ID
+        List<UUID> submissionIds = request.getGrades().stream()
+                .map(BatchGradeSubmissionRequest.GradeItem::getSubmissionId)
+                .toList();
+
+        // 检查是否有重复的submissionId
+        if (submissionIds.size() != submissionIds.stream().distinct().count()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate submission IDs in request");
+        }
+
+        // 批量查询所有submissions
+        List<Submission> submissions = submissionRepository.findAllById(submissionIds);
+
+        // 验证是否有缺失的submission
+        if (submissions.size() != submissionIds.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Some submissions not found");
+        }
+
+        // 验证所有submissions都属于指定的assignment
+        for (Submission submission : submissions) {
+            if (!submission.getAssignmentId().equals(assignmentId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Submission " + submission.getId() + " does not belong to assignment " + assignmentId);
+            }
+        }
+
+        // 创建submission ID到GradeItem的映射
+        java.util.Map<UUID, BatchGradeSubmissionRequest.GradeItem> gradeMap = request.getGrades().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        BatchGradeSubmissionRequest.GradeItem::getSubmissionId,
+                        item -> item));
+
+        // 批量更新评分
+        for (Submission submission : submissions) {
+            BatchGradeSubmissionRequest.GradeItem gradeItem = gradeMap.get(submission.getId());
+            if (gradeItem == null) {
+                continue;
+            }
+
+            submission.setScore(gradeItem.getScore());
+            submission.setFeedback(gradeItem.getFeedback());
+            submission.setRubricScores(toJson(gradeItem.getRubricScores()));
+            submission.setGradingTeacherId(currentUser.getId());
+            if (gradeItem.isPublish()) {
+                submission.setStatus(SubmissionStatus.GRADED);
+            }
+            submission.setAppealReason(null);
+            submission.setAppealedAt(null);
+        }
+
+        // 批量保存
+        List<Submission> saved = submissionRepository.saveAll(submissions);
+
+        // 转换为响应
+        List<SubmissionResponse> responses = saved.stream()
+                .map(this::toResponse)
+                .toList();
+
+        return ApiResponse.success(responses);
     }
 
     @PreAuthorize("hasRole('STUDENT')")

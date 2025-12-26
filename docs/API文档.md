@@ -895,6 +895,48 @@
   - `publish=false` 时仅保存草稿，不修改提交状态。
   - 提交评分后清理历史申诉状态，`publish=true` 时状态改为 `GRADED`。
 
+#### POST `/api/v1/assignments/{assignmentId}/submissions/batch-grade`
+- **角色**：教师 / 管理员
+- **描述**：批量对指定作业的多个提交进行评分，适用于一次性批改多个学生作业的场景。
+- **请求体**
+```json
+{
+  "grades": [
+    {
+      "submissionId": "7f7d5669-20e5-4f84-b897-17c1cfe5a1c0",
+      "score": 92,
+      "rubricScores": [
+        {"criterion": "正确性", "score": 50},
+        {"criterion": "代码规范", "score": 28},
+        {"criterion": "创新性", "score": 14}
+      ],
+      "feedback": "代码质量很高，逻辑清晰。",
+      "publish": true
+    },
+    {
+      "submissionId": "8a8e6770-31f6-5g95-c908-28d2dgf6b2d1",
+      "score": 78,
+      "rubricScores": [
+        {"criterion": "正确性", "score": 40},
+        {"criterion": "代码规范", "score": 25},
+        {"criterion": "创新性", "score": 13}
+      ],
+      "feedback": "基本功能实现正确，但代码注释较少。",
+      "publish": true
+    }
+  ]
+}
+```
+- **业务规则**
+  - `grades` 数组不能为空，至少包含一个评分项。
+  - 每个评分项的 `submissionId` 必须存在且属于指定的 `assignmentId`。
+  - `score` 范围 0-100；`rubricScores` 可为空。
+  - `publish=false` 时仅保存草稿，不修改提交状态；`publish=true` 时状态改为 `GRADED`。
+  - 批量评分后清理所有提交的历史申诉状态。
+  - 如果存在无效的 `submissionId` 或提交不属于指定作业，返回 `400 Bad Request`。
+- **响应**：返回 `SubmissionResponse[]`，包含所有已评分的提交信息。
+- **错误码**：`404` 作业不存在；`403` 非课程负责人访问；`400` 请求参数无效（提交不存在或不属于指定作业）。
+
 #### POST `/api/v1/submissions/{submissionId}/appeal`
 - **角色**：学生（提交者本人）
 - **请求体**
