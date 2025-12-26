@@ -122,10 +122,11 @@ public class AdminUserController {
     public ResponseEntity<ApiResponse<BulkCreateUsersResponse>> createUsers(
             @Valid @RequestBody BulkCreateUsersRequest request) {
 
-        List<AdminUserResponse> createdUsers = new ArrayList<>();
-        List<BulkCreateUsersResponse.CreateUserError> errors = new ArrayList<>();
+        // 第一阶段：验证所有用户的有效性
+        List<BulkCreateUsersResponse.CreateUserError> validationErrors = new ArrayList<>();
         Set<String> usernameSet = new HashSet<>();
         Set<String> emailSet = new HashSet<>();
+        List<BulkCreateUsersRequest.CreateUserPayload> validPayloads = new ArrayList<>();
 
         int index = 0;
         for (BulkCreateUsersRequest.CreateUserPayload payload : request.getUsers()) {
@@ -135,25 +136,50 @@ public class AdminUserController {
             UserStatus status = payload.getStatus() != null ? payload.getStatus() : UserStatus.ACTIVE;
             String statusReason = normalizeReason(payload.getStatusReason());
 
+            // 验证请求内的重复性
             String validationError = validatePayload(
                     payload, role, status, statusReason, usernameSet, emailSet, normalizedUsername, normalizedEmail);
+            
+            // 验证数据库中的唯一性
             if (validationError == null) {
                 validationError = validateAgainstDatabase(payload.getUsername(), payload.getEmail());
             }
 
             if (validationError != null) {
-                errors.add(BulkCreateUsersResponse.CreateUserError.builder()
+                validationErrors.add(BulkCreateUsersResponse.CreateUserError.builder()
                         .index(index)
                         .username(payload.getUsername())
                         .email(payload.getEmail())
                         .message(validationError)
                         .build());
-                index++;
-                continue;
+            } else {
+                usernameSet.add(normalizedUsername);
+                emailSet.add(normalizedEmail);
+                validPayloads.add(payload);
             }
+            index++;
+        }
 
-            usernameSet.add(normalizedUsername);
-            emailSet.add(normalizedEmail);
+        // 如果有任何验证错误，返回所有错误，不创建任何用户
+        if (!validationErrors.isEmpty()) {
+            BulkCreateUsersResponse response = BulkCreateUsersResponse.builder()
+                    .created(List.of())
+                    .errors(validationErrors)
+                    .build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.success(response));
+        }
+
+        // 第二阶段：所有验证通过，统一批量创建
+        List<AdminUserResponse> createdUsers = new ArrayList<>();
+        List<UserAccount> usersToSave = new ArrayList<>();
+        List<StudentProfile> studentProfilesToSave = new ArrayList<>();
+        List<TeacherProfile> teacherProfilesToSave = new ArrayList<>();
+
+        for (BulkCreateUsersRequest.CreateUserPayload payload : validPayloads) {
+            UserRole role = payload.getRole() != null ? payload.getRole() : UserRole.STUDENT;
+            UserStatus status = payload.getStatus() != null ? payload.getStatus() : UserStatus.ACTIVE;
+            String statusReason = normalizeReason(payload.getStatusReason());
 
             UserAccount user = new UserAccount();
             user.setUsername(payload.getUsername().trim());
@@ -162,8 +188,17 @@ public class AdminUserController {
             user.setRole(role);
             user.setStatus(status);
             user.setStatusReason(statusReason);
+            usersToSave.add(user);
+        }
 
-            UserAccount savedUser = userAccountRepository.save(user);
+        // 批量保存用户
+        List<UserAccount> savedUsers = userAccountRepository.saveAll(usersToSave);
+
+        // 创建对应的Profile
+        for (int i = 0; i < savedUsers.size(); i++) {
+            UserAccount savedUser = savedUsers.get(i);
+            BulkCreateUsersRequest.CreateUserPayload payload = validPayloads.get(i);
+
             StudentProfile studentProfileEntity = null;
             TeacherProfile teacherProfileEntity = null;
 
@@ -174,7 +209,7 @@ public class AdminUserController {
                 studentProfileEntity.setGrade(trimToNull(payload.getStudentProfile().getGrade()));
                 studentProfileEntity.setMajor(trimToNull(payload.getStudentProfile().getMajor()));
                 studentProfileEntity.setClassName(trimToNull(payload.getStudentProfile().getClassName()));
-                studentProfileEntity = studentProfileRepository.save(studentProfileEntity);
+                studentProfilesToSave.add(studentProfileEntity);
             }
 
             if (payload.getTeacherProfile() != null) {
@@ -184,20 +219,37 @@ public class AdminUserController {
                 teacherProfileEntity.setDepartment(trimToNull(payload.getTeacherProfile().getDepartment()));
                 teacherProfileEntity.setTitle(trimToNull(payload.getTeacherProfile().getTitle()));
                 teacherProfileEntity.setSubjects(joinSubjects(payload.getTeacherProfile().getSubjects()));
-                teacherProfileEntity = teacherProfileRepository.save(teacherProfileEntity);
+                teacherProfilesToSave.add(teacherProfileEntity);
             }
+        }
 
-            createdUsers.add(toResponse(savedUser, studentProfileEntity, teacherProfileEntity));
-            index++;
+        // 批量保存Profiles
+        if (!studentProfilesToSave.isEmpty()) {
+            studentProfileRepository.saveAll(studentProfilesToSave);
+        }
+        if (!teacherProfilesToSave.isEmpty()) {
+            teacherProfileRepository.saveAll(teacherProfilesToSave);
+        }
+
+        // 构建响应
+        Map<UUID, StudentProfile> studentProfileMap = studentProfilesToSave.stream()
+                .collect(Collectors.toMap(StudentProfile::getUserId, profile -> profile));
+        Map<UUID, TeacherProfile> teacherProfileMap = teacherProfilesToSave.stream()
+                .collect(Collectors.toMap(TeacherProfile::getUserId, profile -> profile));
+
+        for (UserAccount savedUser : savedUsers) {
+            createdUsers.add(toResponse(
+                    savedUser,
+                    studentProfileMap.get(savedUser.getId()),
+                    teacherProfileMap.get(savedUser.getId())));
         }
 
         BulkCreateUsersResponse response = BulkCreateUsersResponse.builder()
                 .created(createdUsers)
-                .errors(errors)
+                .errors(List.of())
                 .build();
 
-        HttpStatus status = createdUsers.isEmpty() ? HttpStatus.OK : HttpStatus.CREATED;
-        return ResponseEntity.status(status).body(ApiResponse.success(response));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
     @PutMapping("/{userId}/status")
