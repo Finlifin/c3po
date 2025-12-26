@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import viteCompression from 'vite-plugin-compression'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -50,6 +51,11 @@ export default defineConfig({
     cssCodeSplit: true,
     // 生成sourcemap（生产环境可以关闭）
     sourcemap: false
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src')
+    }
   },
   server: {
     port: 3000,

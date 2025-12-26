@@ -12,6 +12,7 @@ const users = ref([])
 const loading = ref(false)
 const error = ref('')
 const useMock = ref(false) // 默认使用真实接口，如需演示可切换为 mock
+const isChangingStatus = ref(false) // 状态变更操作的加载状态
 
 // 搜索和筛选
 const searchQuery = ref('')
@@ -23,6 +24,7 @@ const userModalVisible = ref(false)
 const editModalVisible = ref(false)
 const currentUser = ref(null)
 const reviewComment = ref('')
+const isSubmittingEdit = ref(false)
 const editForm = ref({
   username: '',
   email: '',
@@ -269,6 +271,7 @@ const saveEdit = async () => {
   if (!currentUser.value || !editForm.value) return
   
   try {
+    isSubmittingEdit.value = true
     // 验证表单
     if (!validateUserForm(editForm.value)) {
       return
@@ -303,12 +306,196 @@ const saveEdit = async () => {
     await fetchUsers()
   } catch (err) {
     handleApiError(err, '更新用户信息')
+  } finally {
+    isSubmittingEdit.value = false
   }
 }
 
 // 创建用户相关状态
 const createUserModalVisible = ref(false)
 const isSubmittingCreateUser = ref(false)
+
+// 批量创建用户相关变量
+const bulkCreateModalVisible = ref(false)
+const isSubmittingBulkCreate = ref(false)
+const bulkCreateFormat = ref('json') // json 或 csv
+const bulkCreateJsonContent = ref('')
+const bulkCreateCsvContent = ref('')
+const bulkCreateFile = ref(null)
+const bulkCreateResultVisible = ref(false)
+const bulkCreateResult = ref({
+  success: false,
+  message: '',
+  created: [],
+  errors: []
+})
+
+// 重置批量创建表单
+const resetBulkCreateForm = () => {
+  bulkCreateFormat.value = 'json'
+  bulkCreateJsonContent.value = ''
+  bulkCreateCsvContent.value = ''
+  bulkCreateFile.value = null
+  bulkCreateResult.value = {
+    success: false,
+    message: '',
+    created: [],
+    errors: []
+  }
+  bulkCreateResultVisible.value = false
+}
+
+// 打开批量创建模态框
+const openBulkCreateModal = () => {
+  resetBulkCreateForm()
+  bulkCreateModalVisible.value = true
+}
+
+// 关闭批量创建模态框
+const closeBulkCreateModal = () => {
+  bulkCreateModalVisible.value = false
+  resetBulkCreateForm()
+}
+
+// 处理文件上传
+const handleFileUpload = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    bulkCreateFile.value = file
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      bulkCreateCsvContent.value = e.target.result
+    }
+    reader.readAsText(file)
+  }
+}
+
+// CSV转换为JSON
+const csvToJson = (csv) => {
+  const lines = csv.trim().split('\n')
+  if (lines.length < 2) return []
+  
+  const headers = lines[0].split(',').map(h => h.trim())
+  const result = []
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',').map(v => v.trim())
+    if (values.some(v => v)) {
+      const obj = {}
+      headers.forEach((header, index) => {
+        obj[header] = values[index] || ''
+      })
+      result.push(obj)
+    }
+  }
+  
+  return result
+}
+
+// 准备批量创建用户的数据
+const prepareBulkCreateData = () => {
+  let users = []
+  
+  if (bulkCreateFormat.value === 'json') {
+    try {
+      const jsonData = JSON.parse(bulkCreateJsonContent.value)
+      users = Array.isArray(jsonData) ? jsonData : (jsonData.users || [])
+    } catch (error) {
+      throw new Error('JSON格式不正确')
+    }
+  } else {
+    // CSV格式处理
+    const csvUsers = csvToJson(bulkCreateCsvContent.value)
+    users = csvUsers.map(user => {
+      // 转换CSV数据为API所需的JSON格式
+      const result = {
+        username: user.username || '',
+        email: user.email || '',
+        password: user.password || '',
+        role: (user.role || 'STUDENT').toUpperCase(),
+        status: (user.status || 'ACTIVE').toUpperCase()
+      }
+      
+      // 根据角色添加相应的档案信息
+      if (result.role === 'STUDENT') {
+        result.studentProfile = {
+          studentNo: user.studentNo || '',
+          grade: user.grade || undefined,
+          major: user.major || undefined,
+          className: user.className || undefined
+        }
+      } else if (result.role === 'TEACHER') {
+        result.teacherProfile = {
+          teacherNo: user.teacherNo || '',
+          department: user.department || undefined,
+          title: user.title || undefined,
+          subjects: user.subjects ? user.subjects.split(';').map(s => s.trim()) : []
+        }
+      }
+      
+      // 如果状态不是ACTIVE，需要添加statusReason
+      if (result.status !== 'ACTIVE' && user.statusReason) {
+        result.statusReason = user.statusReason
+      }
+      
+      return result
+    })
+  }
+  
+  // 验证数据
+  if (users.length === 0) {
+    throw new Error('没有可创建的用户数据')
+  }
+  
+  return { users }
+}
+
+// 批量创建用户
+const bulkCreateUsers = async () => {
+  try {
+    // 调试：检查token
+    const token = localStorage.getItem('token');
+    console.log('Token exists:', !!token);
+    console.log('Token:', token);
+    
+    isSubmittingBulkCreate.value = true
+    
+    // 准备数据
+    const requestData = prepareBulkCreateData()
+    
+    // 调用API
+    const response = await userAPI.bulkCreateUsers(requestData)
+    
+    // 处理结果
+    bulkCreateResult.value = {
+      success: true,
+      message: `批量创建成功！共创建 ${response.data?.created?.length || 0} 个用户，失败 ${response.data?.errors?.length || 0} 个用户`,
+      created: response.data?.created || [],
+      errors: response.data?.errors || []
+    }
+    
+    // 显示结果
+    bulkCreateResultVisible.value = true
+    
+    // 如果创建成功，刷新用户列表
+    if (response.data?.created?.length > 0) {
+      await fetchUsers()
+    }
+    
+  } catch (error) {
+    console.error('批量创建用户失败:', error)
+    bulkCreateResult.value = {
+      success: false,
+      message: error.message || '批量创建用户失败',
+      created: [],
+      errors: []
+    }
+    bulkCreateResultVisible.value = true
+  } finally {
+    isSubmittingBulkCreate.value = false
+  }
+}
+
 const createUserForm = reactive({
   username: '',
   email: '',
@@ -651,6 +838,7 @@ const toggleUserStatus = async (userId) => {
 // 用户状态更新核心函数
 const changeUserStatus = async (userId, backendStatus, reason = '') => {
   try {
+    isChangingStatus.value = true
     // 确保 userId 是字符串格式
     const userIdStr = String(userId)
     console.log('更新用户状态 - userId:', userIdStr, 'status:', backendStatus)
@@ -678,7 +866,7 @@ const changeUserStatus = async (userId, backendStatus, reason = '') => {
     
     const payload = {
       status: backendStatus,
-      statusReason: backendStatus !== 'ACTIVE' ? reason.trim() : undefined
+      reason: backendStatus !== 'ACTIVE' ? reason.trim() : undefined
     }
     
     // 确认操作
@@ -711,6 +899,8 @@ const changeUserStatus = async (userId, backendStatus, reason = '') => {
   } catch (err) {
     handleApiError(err, '更新用户状态')
     return false
+  } finally {
+    isChangingStatus.value = false
   }
 }
 
@@ -793,6 +983,86 @@ onMounted(() => {
     .form-input.error {
       border-color: #c62828;
     }
+
+    /* 批量创建用户样式 */
+    .bulk-create-form {
+      margin: 20px 0;
+    }
+
+    .format-selector {
+      display: flex;
+      gap: 10px;
+    }
+
+    .format-btn {
+      padding: 8px 16px;
+      border: 1px solid #ccc;
+      background-color: #fff;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .format-btn.active {
+      background-color: #2196f3;
+      color: white;
+      border-color: #2196f3;
+    }
+
+    .form-textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-family: monospace;
+      resize: vertical;
+    }
+
+    .help-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .bulk-create-result {
+      margin: 20px 0;
+    }
+
+    .result-message {
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      background-color: #f5f5f5;
+    }
+
+    .result-message.success {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .result-section {
+      margin-bottom: 20px;
+    }
+
+    .result-section h3 {
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .result-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .result-table th, .result-table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    .result-table th {
+      background-color: #f5f5f5;
+      font-weight: bold;
+    }
   </style>
 
 <template>
@@ -803,6 +1073,7 @@ onMounted(() => {
           <h1 class="page-title">用户管理</h1>
           <div class="header-actions">
             <button class="btn btn-success" @click="openCreateUserModal">创建用户</button>
+            <button class="btn btn-primary" @click="openBulkCreateModal">批量创建用户</button>
             <div class="search-bar">
               <input 
                 type="text" 
@@ -909,6 +1180,7 @@ onMounted(() => {
                     v-if="user.status === 'pending'"
                     class="btn btn-primary btn-sm" 
                     @click="openReviewModal(user.id)"
+                    :disabled="isChangingStatus"
                   >
                     审核
                   </button>
@@ -916,6 +1188,7 @@ onMounted(() => {
                     v-else
                     class="btn btn-warning btn-sm" 
                     @click="toggleUserStatus(user.id)"
+                    :disabled="isChangingStatus"
                   >
                     {{ user.status === 'active' ? '禁用' : '激活' }}
                   </button>
@@ -984,9 +1257,9 @@ onMounted(() => {
             ></textarea>
           </div>
           <div class="text-right">
-            <button class="btn btn-secondary" @click="closeReviewModal">取消</button>
-            <button class="btn btn-danger" @click="rejectUser">驳回</button>
-            <button class="btn btn-primary" @click="approveUser">通过</button>
+            <button class="btn btn-secondary" @click="closeReviewModal" :disabled="isChangingStatus">取消</button>
+            <button class="btn btn-danger" @click="rejectUser" :disabled="isChangingStatus">驳回</button>
+            <button class="btn btn-primary" @click="approveUser" :disabled="isChangingStatus">通过</button>
           </div>
         </div>
       </div>
@@ -1096,12 +1369,172 @@ onMounted(() => {
         </div>
         
         <div class="form-actions">
-          <button type="button" class="btn btn-secondary" @click="closeEditModal">取消</button>
-          <button type="button" class="btn btn-primary" @click="saveEdit">保存</button>
+          <button type="button" class="btn btn-secondary" @click="closeEditModal" :disabled="isSubmittingEdit">取消</button>
+          <button type="button" class="btn btn-primary" @click="saveEdit" :disabled="isSubmittingEdit">
+            {{ isSubmittingEdit ? '保存中...' : '保存' }}
+          </button>
         </div>
       </div>
     </div>
 
+    <!-- 批量创建用户模态框 -->
+    <div v-if="bulkCreateModalVisible" class="modal active" @click.self="closeBulkCreateModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2 class="modal-title">批量创建用户</h2>
+          <button class="modal-close" @click="closeBulkCreateModal">&times;</button>
+        </div>
+        
+        <div class="bulk-create-form">
+          <!-- 格式选择 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">格式选择</label>
+              <div class="format-selector">
+                <button 
+                  class="format-btn" 
+                  :class="{ active: bulkCreateFormat === 'json' }"
+                  @click="bulkCreateFormat = 'json'"
+                >
+                  JSON
+                </button>
+                <button 
+                  class="format-btn" 
+                  :class="{ active: bulkCreateFormat === 'csv' }"
+                  @click="bulkCreateFormat = 'csv'"
+                >
+                  CSV
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- JSON格式输入 -->
+          <div v-if="bulkCreateFormat === 'json'" class="form-row">
+            <div class="form-group">
+              <label class="form-label">JSON内容</label>
+              <textarea 
+                class="form-textarea" 
+                v-model="bulkCreateJsonContent"
+                placeholder='请输入JSON格式的用户数据，例如：{"users": [{"username": "student1", "email": "student1@example.com", "password": "Password123", "role": "STUDENT", "status": "ACTIVE", "studentProfile": {"studentNo": "2025001", "grade": "2025", "major": "软件工程", "className": "软工2501"}}]}'
+                rows="10"
+              ></textarea>
+            </div>
+          </div>
+          
+          <!-- CSV格式输入 -->
+          <div v-else class="form-row">
+            <div class="form-group">
+              <label class="form-label">CSV上传</label>
+              <input 
+                type="file" 
+                accept=".csv" 
+                class="form-input" 
+                @change="handleFileUpload"
+              >
+              <p class="help-text">支持的字段：username, email, password, role, status, statusReason, studentNo, grade, major, className, teacherNo, department, title, subjects</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">CSV内容</label>
+              <textarea 
+                class="form-textarea" 
+                v-model="bulkCreateCsvContent"
+                placeholder='username,email,password,role,status,studentNo,grade,major,className
+student1,student1@example.com,Password123,STUDENT,ACTIVE,2025001,2025,软件工程,软工2501
+student2,student2@example.com,Password123,STUDENT,ACTIVE,2025002,2025,软件工程,软工2501
+teacher1,teacher1@example.com,Teacher123,TEACHER,ACTIVE,T2025001,计算机学院,讲师,程序设计;算法分析'
+                rows="10"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" @click="closeBulkCreateModal">取消</button>
+          <button 
+            type="button" 
+            class="btn btn-success" 
+            @click="bulkCreateUsers"
+            :disabled="isSubmittingBulkCreate"
+          >
+            {{ isSubmittingBulkCreate ? '创建中...' : '批量创建' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 批量创建结果模态框 -->
+    <div v-if="bulkCreateResultVisible" class="modal active" @click.self="bulkCreateResultVisible = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2 class="modal-title">批量创建结果</h2>
+          <button class="modal-close" @click="bulkCreateResultVisible = false">&times;</button>
+        </div>
+        
+        <div class="bulk-create-result">
+          <div class="result-message" :class="{ success: bulkCreateResult.success }">
+            {{ bulkCreateResult.message }}
+          </div>
+          
+          <!-- 成功创建的用户 -->
+          <div v-if="bulkCreateResult.created.length > 0" class="result-section">
+            <h3>成功创建的用户</h3>
+            <table class="result-table">
+              <thead>
+                <tr>
+                  <th>用户名</th>
+                  <th>邮箱</th>
+                  <th>角色</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="user in bulkCreateResult.created" :key="user.id">
+                  <td>{{ user.username }}</td>
+                  <td>{{ user.email }}</td>
+                  <td>{{ getRoleText(user.role) }}</td>
+                  <td>{{ getStatusText(user.status) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- 创建失败的用户 -->
+          <div v-if="bulkCreateResult.errors.length > 0" class="result-section">
+            <h3>创建失败的用户</h3>
+            <table class="result-table">
+              <thead>
+                <tr>
+                  <th>行号</th>
+                  <th>用户名</th>
+                  <th>邮箱</th>
+                  <th>错误信息</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(error, index) in bulkCreateResult.errors" :key="index">
+                  <td>{{ error.index + 1 }}</td>
+                  <td>{{ error.username }}</td>
+                  <td>{{ error.email }}</td>
+                  <td class="error-message">{{ error.message }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button 
+            type="button" 
+            class="btn btn-primary" 
+            @click="bulkCreateResultVisible = false"
+          >
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+    
     <!-- 创建用户模态框 -->
     <div v-if="createUserModalVisible" class="modal active" @click.self="closeCreateUserModal">
       <div class="modal-content" @click.stop>

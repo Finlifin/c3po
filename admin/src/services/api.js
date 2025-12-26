@@ -33,6 +33,8 @@ export const userAPI = {
   getUser: (id) => http.get(`/admin/users/${id}`).catch(error => handleApiError(error, '获取单个用户信息')),
   // 创建用户
   createUser: (userData) => http.post('/admin/users', userData).catch(error => handleApiError(error, '创建用户')),
+  // 批量创建用户
+  bulkCreateUsers: (usersData) => http.post('/admin/users', usersData).catch(error => handleApiError(error, '批量创建用户')),
   // 更新用户信息
   updateUser: (id, userData) => http.patch(`/admin/users/${id}`, userData).catch(error => handleApiError(error, '更新用户信息')),
   // 删除用户

@@ -117,10 +117,280 @@ public class AdminUserController {
         return ApiResponse.success(responses, toPageMeta(result, pageable));
     }
 
-    @PostMapping
+    @PostMapping("/bulk")
     @Transactional
     public ResponseEntity<ApiResponse<BulkCreateUsersResponse>> createUsers(
             @Valid @RequestBody BulkCreateUsersRequest request) {
+
+        // 第一阶段：验证所有用户的有效性
+        List<BulkCreateUsersResponse.CreateUserError> validationErrors = new ArrayList<>();
+        Set<String> usernameSet = new HashSet<>();
+        Set<String> emailSet = new HashSet<>();
+        List<BulkCreateUsersRequest.CreateUserPayload> validPayloads = new ArrayList<>();
+
+        int index = 0;
+        for (BulkCreateUsersRequest.CreateUserPayload payload : request.getUsers()) {
+            String normalizedUsername = payload.getUsername().trim().toLowerCase(Locale.ROOT);
+            String normalizedEmail = payload.getEmail().trim().toLowerCase(Locale.ROOT);
+            UserRole role = payload.getRole() != null ? payload.getRole() : UserRole.STUDENT;
+            UserStatus status = payload.getStatus() != null ? payload.getStatus() : UserStatus.ACTIVE;
+            String statusReason = normalizeReason(payload.getStatusReason());
+
+            // 验证请求内的重复性
+            String validationError = validatePayload(
+                    payload, role, status, statusReason, usernameSet, emailSet, normalizedUsername, normalizedEmail);
+            
+            // 验证数据库中的唯一性
+            if (validationError == null) {
+                validationError = validateAgainstDatabase(payload.getUsername(), payload.getEmail());
+            }
+
+            if (validationError != null) {
+                validationErrors.add(BulkCreateUsersResponse.CreateUserError.builder()
+                        .index(index)
+                        .username(payload.getUsername())
+                        .email(payload.getEmail())
+                        .message(validationError)
+                        .build());
+            } else {
+                usernameSet.add(normalizedUsername);
+                emailSet.add(normalizedEmail);
+                validPayloads.add(payload);
+            }
+            index++;
+        }
+
+        // 如果有任何验证错误，返回所有错误，不创建任何用户
+        if (!validationErrors.isEmpty()) {
+            BulkCreateUsersResponse response = BulkCreateUsersResponse.builder()
+                    .created(List.of())
+                    .errors(validationErrors)
+                    .build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.success(response));
+        }
+
+        // 第二阶段：所有验证通过，统一批量创建
+        List<AdminUserResponse> createdUsers = new ArrayList<>();
+        List<UserAccount> usersToSave = new ArrayList<>();
+        List<StudentProfile> studentProfilesToSave = new ArrayList<>();
+        List<TeacherProfile> teacherProfilesToSave = new ArrayList<>();
+
+        for (BulkCreateUsersRequest.CreateUserPayload payload : validPayloads) {
+            UserRole role = payload.getRole() != null ? payload.getRole() : UserRole.STUDENT;
+            UserStatus status = payload.getStatus() != null ? payload.getStatus() : UserStatus.ACTIVE;
+            String statusReason = normalizeReason(payload.getStatusReason());
+
+            UserAccount user = new UserAccount();
+            user.setUsername(payload.getUsername().trim());
+            user.setEmail(payload.getEmail().trim());
+            user.setPassword(passwordEncoder.encode(payload.getPassword()));
+            user.setRole(role);
+            user.setStatus(status);
+            user.setStatusReason(statusReason);
+            usersToSave.add(user);
+        }
+
+        // 批量保存用户
+        List<UserAccount> savedUsers = userAccountRepository.saveAll(usersToSave);
+
+        // 创建对应的Profile
+        for (int i = 0; i < savedUsers.size(); i++) {
+            UserAccount savedUser = savedUsers.get(i);
+            BulkCreateUsersRequest.CreateUserPayload payload = validPayloads.get(i);
+
+            StudentProfile studentProfileEntity = null;
+            TeacherProfile teacherProfileEntity = null;
+
+            if (payload.getStudentProfile() != null) {
+                studentProfileEntity = new StudentProfile();
+                studentProfileEntity.setUserId(savedUser.getId());
+                studentProfileEntity.setStudentNo(payload.getStudentProfile().getStudentNo().trim());
+                studentProfileEntity.setGrade(trimToNull(payload.getStudentProfile().getGrade()));
+                studentProfileEntity.setMajor(trimToNull(payload.getStudentProfile().getMajor()));
+                studentProfileEntity.setClassName(trimToNull(payload.getStudentProfile().getClassName()));
+                studentProfilesToSave.add(studentProfileEntity);
+            } else if (payload.getTeacherProfile() != null) {
+                teacherProfileEntity = new TeacherProfile();
+                teacherProfileEntity.setUserId(savedUser.getId());
+                teacherProfileEntity.setTeacherNo(payload.getTeacherProfile().getTeacherNo().trim());
+                teacherProfileEntity.setDepartment(trimToNull(payload.getTeacherProfile().getDepartment()));
+                teacherProfileEntity.setTitle(trimToNull(payload.getTeacherProfile().getTitle()));
+                if (payload.getTeacherProfile().getSubjects() != null) {
+                    teacherProfileEntity.setSubjects(payload.getTeacherProfile().getSubjects().stream()
+                            .map(String::trim)
+                            .filter(StringUtils::hasText)
+                            .collect(Collectors.joining("|")));
+                }
+                teacherProfilesToSave.add(teacherProfileEntity);
+            }
+        }
+
+        // 批量保存档案信息
+        studentProfileRepository.saveAll(studentProfilesToSave);
+        teacherProfileRepository.saveAll(teacherProfilesToSave);
+
+        // 获取保存的档案信息
+        Map<UUID, StudentProfile> studentProfileMap = studentProfilesToSave.isEmpty() ? Map.of()
+                : studentProfileRepository.findByUserIdIn(savedUsers.stream()
+                        .map(UserAccount::getId)
+                        .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(StudentProfile::getUserId, profile -> profile));
+
+        Map<UUID, TeacherProfile> teacherProfileMap = teacherProfilesToSave.isEmpty() ? Map.of()
+                : teacherProfileRepository.findByUserIdIn(savedUsers.stream()
+                        .map(UserAccount::getId)
+                        .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(TeacherProfile::getUserId, profile -> profile));
+
+        for (UserAccount savedUser : savedUsers) {
+            createdUsers.add(toResponse(
+                    savedUser,
+                    studentProfileMap.get(savedUser.getId()),
+                    teacherProfileMap.get(savedUser.getId())));
+        }
+
+        BulkCreateUsersResponse response = BulkCreateUsersResponse.builder()
+                .created(createdUsers)
+                .errors(List.of())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+      
+      @PostMapping
+    @Transactional
+    public ResponseEntity<ApiResponse<AdminUserResponse>> createUser(
+            @Valid @RequestBody BulkCreateUsersRequest request) {
+        // For backwards compatibility, handle single user creation
+        if (request.getUsers() != null && request.getUsers().size() == 1) {
+            // Reuse the bulk create logic but only create one user
+            List<BulkCreateUsersResponse.CreateUserError> validationErrors = new ArrayList<>();
+            Set<String> usernameSet = new HashSet<>();
+            Set<String> emailSet = new HashSet<>();
+            List<BulkCreateUsersRequest.CreateUserPayload> validPayloads = new ArrayList<>();
+            
+            int index = 0;
+            BulkCreateUsersRequest.CreateUserPayload payload = request.getUsers().get(0);
+            String normalizedUsername = payload.getUsername().trim().toLowerCase(Locale.ROOT);
+            String normalizedEmail = payload.getEmail().trim().toLowerCase(Locale.ROOT);
+            UserRole role = payload.getRole() != null ? payload.getRole() : UserRole.STUDENT;
+            UserStatus status = payload.getStatus() != null ? payload.getStatus() : UserStatus.ACTIVE;
+            String statusReason = normalizeReason(payload.getStatusReason());
+            
+            // 验证请求内的重复性
+            String validationError = validatePayload(
+                    payload, role, status, statusReason, usernameSet, emailSet, normalizedUsername, normalizedEmail);
+            
+            // 验证数据库中的唯一性
+            if (validationError == null) {
+                validationError = validateAgainstDatabase(payload.getUsername(), payload.getEmail());
+            }
+            
+            if (validationError != null) {
+                validationErrors.add(BulkCreateUsersResponse.CreateUserError.builder()
+                        .index(index)
+                        .username(payload.getUsername())
+                        .email(payload.getEmail())
+                        .message(validationError)
+                        .build());
+            } else {
+                usernameSet.add(normalizedUsername);
+                emailSet.add(normalizedEmail);
+                validPayloads.add(payload);
+            }
+            
+            // 如果有任何验证错误，返回错误
+            if (!validationErrors.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, validationErrors.get(0).getMessage());
+            }
+            
+            // 创建单个用户
+            List<AdminUserResponse> createdUsers = new ArrayList<>();
+            List<UserAccount> usersToSave = new ArrayList<>();
+            List<StudentProfile> studentProfilesToSave = new ArrayList<>();
+            List<TeacherProfile> teacherProfilesToSave = new ArrayList<>();
+            
+            for (BulkCreateUsersRequest.CreateUserPayload validPayload : validPayloads) {
+                UserRole userRole = validPayload.getRole() != null ? validPayload.getRole() : UserRole.STUDENT;
+                UserStatus userStatus = validPayload.getStatus() != null ? validPayload.getStatus() : UserStatus.ACTIVE;
+                String userStatusReason = normalizeReason(validPayload.getStatusReason());
+                
+                UserAccount user = new UserAccount();
+                user.setUsername(validPayload.getUsername().trim());
+                user.setEmail(validPayload.getEmail().trim());
+                user.setPassword(passwordEncoder.encode(validPayload.getPassword()));
+                user.setRole(userRole);
+                user.setStatus(userStatus);
+                user.setStatusReason(userStatusReason);
+                usersToSave.add(user);
+            }
+            
+            // 保存用户
+            List<UserAccount> savedUsers = userAccountRepository.saveAll(usersToSave);
+            
+            // 创建对应的Profile
+            for (int i = 0; i < savedUsers.size(); i++) {
+                UserAccount savedUser = savedUsers.get(i);
+                BulkCreateUsersRequest.CreateUserPayload validPayload = validPayloads.get(i);
+                
+                if (validPayload.getStudentProfile() != null) {
+                    StudentProfile studentProfileEntity = new StudentProfile();
+                    studentProfileEntity.setUserId(savedUser.getId());
+                    studentProfileEntity.setStudentNo(validPayload.getStudentProfile().getStudentNo().trim());
+                    studentProfileEntity.setGrade(trimToNull(validPayload.getStudentProfile().getGrade()));
+                    studentProfileEntity.setMajor(trimToNull(validPayload.getStudentProfile().getMajor()));
+                    studentProfileEntity.setClassName(trimToNull(validPayload.getStudentProfile().getClassName()));
+                    studentProfilesToSave.add(studentProfileEntity);
+                } else if (validPayload.getTeacherProfile() != null) {
+                    TeacherProfile teacherProfileEntity = new TeacherProfile();
+                    teacherProfileEntity.setUserId(savedUser.getId());
+                    teacherProfileEntity.setTeacherNo(validPayload.getTeacherProfile().getTeacherNo().trim());
+                    teacherProfileEntity.setDepartment(trimToNull(validPayload.getTeacherProfile().getDepartment()));
+                    teacherProfileEntity.setTitle(trimToNull(validPayload.getTeacherProfile().getTitle()));
+                    if (validPayload.getTeacherProfile().getSubjects() != null) {
+                        teacherProfileEntity.setSubjects(validPayload.getTeacherProfile().getSubjects().stream()
+                                .map(String::trim)
+                                .filter(StringUtils::hasText)
+                                .collect(Collectors.joining("|")));
+                    }
+                    teacherProfilesToSave.add(teacherProfileEntity);
+                }
+            }
+            
+            // 批量保存档案信息
+            studentProfileRepository.saveAll(studentProfilesToSave);
+            teacherProfileRepository.saveAll(teacherProfilesToSave);
+            
+            // 获取保存的档案信息
+            Map<UUID, StudentProfile> studentProfileMap = studentProfilesToSave.isEmpty() ? Map.of()
+                    : studentProfileRepository.findByUserIdIn(savedUsers.stream()
+                            .map(UserAccount::getId)
+                            .collect(Collectors.toSet()))
+                    .stream()
+                    .collect(Collectors.toMap(StudentProfile::getUserId, profile -> profile));
+            
+            Map<UUID, TeacherProfile> teacherProfileMap = teacherProfilesToSave.isEmpty() ? Map.of()
+                    : teacherProfileRepository.findByUserIdIn(savedUsers.stream()
+                            .map(UserAccount::getId)
+                            .collect(Collectors.toSet()))
+                    .stream()
+                    .collect(Collectors.toMap(TeacherProfile::getUserId, profile -> profile));
+            
+            for (UserAccount savedUser : savedUsers) {
+                createdUsers.add(toResponse(
+                        savedUser,
+                        studentProfileMap.get(savedUser.getId()),
+                        teacherProfileMap.get(savedUser.getId())));
+            }
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(createdUsers.get(0)));
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use /bulk endpoint for multiple users");
+        }
+        
 
         // 第一阶段：验证所有用户的有效性
         List<BulkCreateUsersResponse.CreateUserError> validationErrors = new ArrayList<>();
