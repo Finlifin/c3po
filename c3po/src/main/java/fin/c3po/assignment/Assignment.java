@@ -5,6 +5,7 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
@@ -52,7 +53,7 @@ public class Assignment extends BaseEntity {
     @Column(length = 4096)
     private String gradingRubric; // JSON string for rubric (kept simple)
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "assignment_visibility_tags", joinColumns = @JoinColumn(name = "assignment_id"))
     @Column(name = "visibility_tags")
     @OnDelete(action = OnDeleteAction.CASCADE)

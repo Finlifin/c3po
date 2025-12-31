@@ -1275,45 +1275,255 @@
 }
 ```
 
-#### 4.8.3 AI 助手对话
+#### 4.8.3 AI 助手对话（已实现）
+
+AI 学习助手基于 DeepSeek API 实现，提供以下核心功能：
+- **智能答疑**：回答学生关于课程内容的问题
+- **知识点总结**：帮助学生总结和梳理学习内容的重点
+- **个性化学习路径推荐**：根据学习进度和表现推荐学习内容
+- **智能笔记整理与复习提醒**：提醒作业截止日期，建议复习计划
+
+##### 上下文摘取策略
+
+AI 助手会自动从数据库中提取以下上下文信息，以提供个性化回答：
+
+1. **学生信息**：姓名、专业、年级
+2. **课程信息**：课程名称、学期、学分、授课教师
+3. **章节结构**：所有章节标题及包含的学习资源
+4. **当前学习位置**：正在学习的章节、资源
+5. **作业信息**：即将截止的作业、当前作业要求
+6. **成绩概览**：平均分、已完成作业数
 
 ##### POST `/api/v1/assistant/chat`
-- **角色**：默认校验需登录；后续可结合用户偏好（`/api/v1/users/me/preferences`) 中的 `aiAssistantEnabled` 开关。
-- **描述**：基于课程上下文、历史对话为学生/教师提供智能辅学回答。接口支持两种响应模式：
-  1. **JSON 模式**：返回完整回答及推荐的下一步操作。
-  2. **SSE 流式模式**：通过 `Content-Type: text/event-stream` 推送增量消息，字段 `event`=`message`/`complete`。
+- **角色**：已认证用户（`ROLE_STUDENT | ROLE_TEACHER | ROLE_ADMIN`）
+- **描述**：基于课程上下文、历史对话为学生/教师提供智能辅学回答。
 - **请求体**
-  - `context`：可选，包含 `courseId`、`moduleId`、`studentId` 等上下文，有助于限定知识范围。
-  - `messages`：必填，会话消息列表（按时间排序），`role` 仅支持 `system|assistant|student|teacher`。
-  - `preferences`：可选，控制语言、风格、最大响应长度、是否附带参考资料等。
-- **JSON 成功响应（规划中，v1.1 引入）**
+```json
+{
+  "context": {
+    "courseId": "uuid",           // 可选，当前课程ID
+    "moduleId": "uuid",           // 可选，当前章节ID
+    "resourceId": "uuid",         // 可选，当前资源ID
+    "assignmentId": "uuid",       // 可选，当前作业ID
+    "studentId": "uuid",          // 可选，学生ID（默认为当前用户）
+    "videoTimestamp": 120,        // 可选，视频时间戳（秒）
+    "pageNumber": 5               // 可选，PDF页码
+  },
+  "messages": [
+    {
+      "role": "USER",             // SYSTEM | ASSISTANT | USER
+      "content": "什么是函数式编程？"
+    }
+  ],
+  "preferences": {
+    "language": "zh-CN",          // 响应语言
+    "style": "EDUCATIONAL",       // CONCISE | DETAILED | EDUCATIONAL
+    "maxLength": 2000,            // 最大响应长度
+    "includeReferences": true,    // 是否包含参考资料
+    "includeSuggestions": true    // 是否包含建议操作
+  },
+  "stream": false                 // 是否流式响应（暂未实现）
+}
+```
+- **响应体**
 ```json
 {
   "traceId": "c1f23b19-8744-4f7a-86d1-51bd2645df06",
   "success": true,
   "data": {
-    "conversationId": "conv-20251113-0001",
-    "answer": "函数式编程强调函数是第一类公民，核心特点包括......",
+    "conversationId": "uuid",
+    "answer": "函数式编程是一种编程范式，它将计算视为数学函数的求值...",
     "references": [
-      {"type": "module", "id": "M003", "title": "第 3 周 · 闭包与惰性求值"}
+      {
+        "type": "module",
+        "id": "uuid",
+        "title": "第 3 章 · 函数式编程基础",
+        "snippet": null
+      }
     ],
     "suggestions": [
-      {"action": "open_resource", "target": "M003-R02"},
-      {"action": "practice_quiz", "target": "assignment-quiz-09"}
-    ]
+      {
+        "action": "continue_learning",
+        "target": null,
+        "title": "继续学习: 第 4 章 · 高阶函数"
+      },
+      {
+        "action": "complete_assignment",
+        "target": null,
+        "title": "完成作业: 函数式编程练习"
+      }
+    ],
+    "usage": {
+      "promptTokens": 1234,
+      "completionTokens": 567,
+      "totalTokens": 1801
+    }
   },
   "meta": null,
   "error": null
 }
 ```
-- **SSE 事件格式**
-  - `event: message\ndata: {"content": "..."}`
-  - `event: metadata\ndata: {"references":[...]}`（可选）
-  - `event: complete\ndata: {"conversationId": "...", "usage": {"promptTokens": 123, "completionTokens": 456}}`
 - **异常**
-  - `400`：上下文不合法（缺失必须字段、消息序列为空）。
-  - `403`：用户未开启 AI 助手或超出使用配额。
-  - `503`：AI 模型服务不可用（透传后端 `Retry-After`）。
+  - `400`：消息序列为空或格式不正确
+  - `401`：未认证
+  - `503`：AI 模型服务不可用
+
+##### GET `/api/v1/assistant/conversations`
+- **角色**：已认证用户
+- **描述**：获取当前用户的历史对话列表。
+- **响应体**
+```json
+{
+  "traceId": "uuid",
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "userId": "uuid",
+      "courseId": "uuid",
+      "moduleId": "uuid",
+      "title": "什么是函数式编程？",
+      "messageCount": 4,
+      "totalTokens": 2500,
+      "createdAt": "2025-11-12T08:00:00Z",
+      "updatedAt": "2025-11-12T08:05:00Z"
+    }
+  ],
+  "meta": null,
+  "error": null
+}
+```
+
+##### GET `/api/v1/assistant/conversations/{conversationId}/messages`
+- **角色**：已认证用户
+- **描述**：获取指定对话的消息列表。
+- **响应体**
+```json
+{
+  "traceId": "uuid",
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "conversationId": "uuid",
+      "role": "USER",
+      "content": "什么是函数式编程？",
+      "messageOrder": 0,
+      "tokens": null,
+      "createdAt": "2025-11-12T08:00:00Z",
+      "updatedAt": "2025-11-12T08:00:00Z"
+    },
+    {
+      "id": "uuid",
+      "conversationId": "uuid",
+      "role": "ASSISTANT",
+      "content": "函数式编程是一种编程范式...",
+      "messageOrder": 1,
+      "tokens": 567,
+      "createdAt": "2025-11-12T08:00:05Z",
+      "updatedAt": "2025-11-12T08:00:05Z"
+    }
+  ],
+  "meta": null,
+  "error": null
+}
+```
+
+##### GET `/api/v1/assistant/summary`
+- **角色**：已认证用户
+- **描述**：获取课程或章节的知识点总结（便捷接口）。
+- **查询参数**
+  - `courseId`：必填，课程ID
+  - `moduleId`：可选，章节ID（如提供则聚焦该章节）
+- **响应体**：同 `POST /api/v1/assistant/chat`
+
+##### GET `/api/v1/assistant/learning-path`
+- **角色**：已认证用户
+- **描述**：获取个性化学习路径推荐。
+- **查询参数**
+  - `courseId`：必填，课程ID
+- **响应体**：同 `POST /api/v1/assistant/chat`
+
+##### GET `/api/v1/assistant/review-reminder`
+- **角色**：已认证用户
+- **描述**：获取复习提醒和学习计划。
+- **查询参数**
+  - `courseId`：可选，课程ID（如不提供则检查所有课程）
+- **响应体**：同 `POST /api/v1/assistant/chat`
+
+#### 4.8.4 对话记录管理
+
+##### GET `/api/v1/assistant/conversations/{conversationId}`
+- **角色**：已认证用户（仅限对话所有者）
+- **描述**：获取指定对话的详细信息。
+- **响应体**
+```json
+{
+  "traceId": "uuid",
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "userId": "uuid",
+    "courseId": "uuid",
+    "moduleId": "uuid",
+    "title": "什么是函数式编程？",
+    "messageCount": 4,
+    "totalTokens": 2500,
+    "createdAt": "2025-11-12T08:00:00Z",
+    "updatedAt": "2025-11-12T08:05:00Z"
+  },
+  "meta": null,
+  "error": null
+}
+```
+- **异常**：`404`（对话不存在或无权访问）
+
+##### PATCH `/api/v1/assistant/conversations/{conversationId}`
+- **角色**：已认证用户（仅限对话所有者）
+- **描述**：更新对话标题。
+- **请求体**
+```json
+{
+  "title": "新的对话标题"
+}
+```
+- **响应体**：同 `GET /api/v1/assistant/conversations/{conversationId}`
+- **异常**：`404`（对话不存在或无权访问）
+
+##### DELETE `/api/v1/assistant/conversations/{conversationId}`
+- **角色**：已认证用户（仅限对话所有者）
+- **描述**：删除指定对话及其所有消息。
+- **响应体**
+```json
+{
+  "traceId": "uuid",
+  "success": true,
+  "data": {
+    "deleted": true,
+    "conversationId": "uuid"
+  },
+  "meta": null,
+  "error": null
+}
+```
+- **异常**：`404`（对话不存在或无权访问）
+
+##### DELETE `/api/v1/assistant/conversations`
+- **角色**：已认证用户
+- **描述**：清除当前用户的所有对话记录。
+- **响应体**
+```json
+{
+  "traceId": "uuid",
+  "success": true,
+  "data": {
+    "deleted": true,
+    "count": 5
+  },
+  "meta": null,
+  "error": null
+}
+```
 
 
 ### 4.9 管理员审批与系统设置

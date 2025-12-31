@@ -16,4 +16,6 @@ public interface SubmissionRepository extends JpaRepository<Submission, UUID> {
     Optional<Submission> findWithAttachmentsById(UUID id);
 
     boolean existsByAssignmentIdAndStudentId(UUID assignmentId, UUID studentId);
+    
+    Optional<Submission> findByAssignmentIdAndStudentId(UUID assignmentId, UUID studentId);
 }

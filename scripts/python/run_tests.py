@@ -127,6 +127,10 @@ def http_delete(path: str) -> Tuple[str, str]:
     return http_request("DELETE", path)
 
 
+def http_patch(path: str, data: str) -> Tuple[str, str]:
+    return http_request("PATCH", path, data=data)
+
+
 def assert_status(expected: str, actual: str, message: str) -> bool:
     if actual == expected:
         log_success(f"{message} (HTTP {actual})")
@@ -465,6 +469,9 @@ def main() -> int:
 
         course_content_module = import_module("test_course_content")
         course_content_module.run_course_content_tests()
+        
+        ai_assistant_module = import_module("test_ai_assistant")
+        ai_assistant_module.run_ai_assistant_tests()
     else:
         log_error("Authentication failed, skipping other tests")
 
