@@ -46,7 +46,7 @@ echo "3. Testing with authentication header:"
 # 先登录获取token
 set token_response (curl -s -X POST \
     -H "Content-Type: application/json" \
-    -d '{"identifier":"testadmin","password":"admin123"}' \
+    -d '{"identifier":"admin","password":"admin123"}' \
     http://localhost:8080/api/v1/auth/login)
 set token (echo $token_response | jq -r '.accessToken // empty')
 

@@ -265,44 +265,44 @@ export const mockAPI = {
   // 认证
   login: async (credentials) => {
     await delay();
-    if (credentials.username === 'admin' && credentials.password === 'admin123') {
-      return mockLoginResponse;
-    }
+    // if (credentials.username === 'admin' && credentials.password === 'admin123') {
+    //   return mockLoginResponse;
+    // }
     throw new Error('用户名或密码错误');
   },
-  
+
   // 仪表盘
   getDashboardStats: async () => {
     await delay();
     return mockDashboardStats;
   },
-  
+
   getRecentActivities: async () => {
     await delay();
     return mockRecentActivities;
   },
-  
+
   getPendingTasks: async () => {
     await delay();
     return mockPendingTasks;
   },
-  
+
   // 用户管理
   getUsers: async (params = {}) => {
     await delay();
     let filteredUsers = [...mockUsers];
-    
+
     // 模拟搜索功能
     if (params.search) {
-      filteredUsers = filteredUsers.filter(user => 
-        user.username.includes(params.search) || 
+      filteredUsers = filteredUsers.filter(user =>
+        user.username.includes(params.search) ||
         user.email.includes(params.search)
       );
     }
-    
+
     return filteredUsers;
   },
-  
+
   // 其他API模拟...
   getUser: async (id) => {
     await delay();

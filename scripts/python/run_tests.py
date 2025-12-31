@@ -18,8 +18,8 @@ from typing import Optional, Tuple
 
 
 API_BASE_URL = os.environ.get("C3PO_API_BASE_URL", "http://localhost:8080/api/v1")
-API_TIMEOUT = float(os.environ.get("C3PO_API_TIMEOUT", "10"))
-ADMIN_USERNAME = os.environ.get("C3PO_ADMIN_USERNAME", "testadmin")
+API_TIMEOUT = float(os.environ.get("C3PO_API_TIMEOUT", "200"))
+ADMIN_USERNAME = os.environ.get("C3PO_ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("C3PO_ADMIN_PASSWORD", "admin123")
 
 TOKEN_FILE = Path(

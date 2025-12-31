@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 : "${API_BASE_URL:="http://localhost:8080/api/v1"}"
 : "${API_TIMEOUT:=10}"
-: "${ADMIN_USERNAME:="testadmin"}"
+: "${ADMIN_USERNAME:="admin"}"
 : "${ADMIN_PASSWORD:="admin123"}"
 
 : "${TEST_DATA_DIR:="$SCRIPT_DIR/data"}"

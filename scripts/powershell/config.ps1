@@ -18,7 +18,7 @@ if (-not $Script:ConfigInitialized) {
 
     $username = $env:C3PO_ADMIN_USERNAME
     if ([string]::IsNullOrWhiteSpace($username)) {
-        $username = "testadmin"
+        $username = "admin"
     }
     $Script:AdminUsername = $username
 
