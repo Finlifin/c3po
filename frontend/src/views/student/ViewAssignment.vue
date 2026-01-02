@@ -1,10 +1,5 @@
 <template>
-  <div class="view-assignment">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-      <div class="content">
+  <div class="view-assignment-page">
         <!-- 页面标题 -->
         <div class="page-header">
           <div class="header-actions">
@@ -174,8 +169,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -183,7 +176,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -249,7 +241,7 @@ const UPLOAD_API_BASE_URL = 'http://10.70.141.134:5000/api/v1'
 
 // 获取token
 const getToken = () => {
-  return localStorage.getItem('Stoken')
+  return localStorage.getItem('StuToken')
 }
 
 // 检查token有效性
@@ -266,13 +258,6 @@ const checkAuth = () => {
     return false
   }
   return true
-}
-
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('Stoken')
-  localStorage.removeItem('user')
-  router.push('/student')
 }
 
 // 返回上一页
@@ -292,18 +277,18 @@ const formatDate = (dateString: string) => {
 }
 
 // 获取状态文本
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'SUBMITTED':
-      return '已提交'
-    case 'GRADED':
-      return '已评分'
-    case 'REJECTED':
-      return '已退回'
-    default:
-      return '未知状态'
-  }
-}
+// const getStatusText = (status: string) => {
+//   switch (status) {
+//     case 'SUBMITTED':
+//       return '已提交'
+//     case 'GRADED':
+//       return '已评分'
+//     case 'REJECTED':
+//       return '已退回'
+//     default:
+//       return '未知状态'
+//   }
+// }
 
 // 判断是否可以重新提交
 const canResubmit = computed(() => {
@@ -373,7 +358,7 @@ const fetchSubmissionDetails = async () => {
     
     submission.value = response.data.data
     // 处理附件
-    if (submission.value.attachments) {
+    if (submission.value && submission.value.attachments) {
       processAttachments(submission.value.attachments)
     }
   } catch (err: any) {
@@ -496,29 +481,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.view-assignment {
-  width: 113%;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  display: flex;
-  overflow: hidden;
-}
-
-/* 右侧主内容 */
-.main-content {
-  flex: 1;
-  margin-left: 220px; /* 与侧边栏宽度一致 */
-  display: flex;
-  flex-direction: column;
-  width: calc(100vw - 280px);
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
-.content {
-  padding: 30px;
-  width: 80%;
-  box-sizing: border-box;
+.view-assignment-page {
+  padding: var(--space-6);
 }
 
 /* 页面标题 */
@@ -1011,11 +975,6 @@ onMounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 1024px) {
-  .main-content {
-    margin-left: 0;
-    width: 100vw;
-  }
-  
   .info-meta {
     flex-direction: column;
     align-items: flex-start;
@@ -1024,9 +983,6 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .content {
-    padding: 20px;
-  }
   
   .info-header {
     flex-direction: column;

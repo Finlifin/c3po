@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import axios from 'axios'
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import TeacherSidebar from '../../components/TeacherSidebar.vue'
-
-// API配置
-const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
+import { teacherApi } from '../../api/teacher'
+import { ElMessage } from 'element-plus'
+import PageContainer from '../../components/layout/PageContainer.vue'
+import GridRow from '../../components/layout/GridRow.vue'
+import GridCol from '../../components/layout/GridCol.vue'
 
 // 路由参数
 const route = useRoute()
@@ -15,7 +15,7 @@ const courseId = route.params.courseId as string
 // 作业表单
 const assignmentForm = ref({
   title: '',
-  type: '',
+  type: 'ASSIGNMENT',
   deadline: '',
   allowResubmit: true,
   maxResubmit: 3,
@@ -26,11 +26,11 @@ const assignmentForm = ref({
   ],
   visibility: {
     releaseAt: '',
-    visibleTo: []
+    visibleTo: [] as string[]
   }
 })
 
-// 临时变量，用于日期选择器（不包含时区）
+// 临时变量，用于日期选择器
 const tempReleaseAt = ref('')
 const tempDeadline = ref('')
 
@@ -44,83 +44,64 @@ const toISOWithTimezone = (date: Date) => {
 
 // 发布时间变化处理
 const handleReleaseAtChange = (newVal: string) => {
-  const date = new Date(newVal)
-  assignmentForm.value.visibility.releaseAt = toISOWithTimezone(date)
+  if (newVal) {
+    const date = new Date(newVal)
+    assignmentForm.value.visibility.releaseAt = toISOWithTimezone(date)
+  }
 }
 
 // 截止时间变化处理
 const handleDeadlineChange = (newVal: string) => {
-  const date = new Date(newVal)
-  assignmentForm.value.deadline = toISOWithTimezone(date)
+  if (newVal) {
+    const date = new Date(newVal)
+    assignmentForm.value.deadline = toISOWithTimezone(date)
+  }
 }
 
 // visibleTo 临时字符串变量，用于双向绑定
 const visibleToInput = ref('')
 
-// 错误信息
-const error = ref('')
-const success = ref('')
-
-// 获取当前用户信息
-const getCurrentUser = async () => {
-  try {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      return null
-    }
-    
-    const response = await axios.get(`${API_BASE_URL}/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-    
-    return response.data
-  } catch (err: any) {
-    console.error('获取用户信息失败:', err)
-    return null
-  }
-}
+const loading = ref(false)
 
 // 创建作业
 const createAssignment = async () => {
+  if (!assignmentForm.value.title) {
+    ElMessage.warning('请输入作业标题')
+    return
+  }
+  if (!tempReleaseAt.value) {
+    ElMessage.warning('请选择发布时间')
+    return
+  }
+  if (!tempDeadline.value) {
+    ElMessage.warning('请选择截止时间')
+    return
+  }
+
+  loading.value = true
   try {
-    const user = await getCurrentUser()
-    if (!user?.id) {
-      throw new Error('未获取到教师ID')
-    }
-    
     // 发送POST请求创建作业
-    const response = await axios.post(`${API_BASE_URL}/courses/${courseId}/assignments`, assignmentForm.value, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    })
+    const response = await teacherApi.createAssignment(courseId, assignmentForm.value)
     
     // 获取作业ID
     const assignmentId = response.data.data.id
     
     // 发布作业
-    await axios.post(`${API_BASE_URL}/assignments/${assignmentId}/publish`, {}, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    })
+    await teacherApi.publishAssignment(assignmentId)
     
-    // 显示成功信息
-    success.value = '作业发布成功'
+    ElMessage.success('作业发布成功')
     
-    // 3秒后跳转到课程资源页面
+    // 1.5秒后跳转到课程资源页面
     setTimeout(() => {
-      router.push(`/teacher/courses/${courseId}`)
-    }, 3000)
+      router.push(`/teacher/courses/${courseId}/assignments`)
+    }, 1500)
   } catch (err: any) {
-    error.value = err.response?.data?.message || '作业发布失败'
-    console.error('作业发布失败:', err)
+     console.error('作业发布失败:', err)
+     ElMessage.error(err.message || '作业发布失败')
+  } finally {
+    loading.value = false
   }
 }
-
-
 
 // 页面加载时的初始化
 onMounted(() => {
@@ -133,222 +114,183 @@ onMounted(() => {
   assignmentForm.value.deadline = toISOWithTimezone(deadline)
   
   // 设置临时变量的初始值（不包含时区，用于日期选择器）
+  // Element Plus date picker uses Date object or string. 
+  // Using ISO string without timezone for local time representation if needed, 
+  // but Element Plus works well with Date objects.
+  // Let's try using Date objects for the picker models if possible, or formatted strings.
+  // The original code used slice(0, 19) which is YYYY-MM-DDTHH:mm:ss
   tempReleaseAt.value = now.toISOString().slice(0, 19)
   tempDeadline.value = deadline.toISOString().slice(0, 19)
 })
+
+const addRubricItem = () => {
+  assignmentForm.value.gradingRubric.push({ criterion: '', weight: 0 })
+}
+
+const removeRubricItem = (index: number) => {
+  assignmentForm.value.gradingRubric.splice(index, 1)
+}
 </script>
 
 <template>
-  <div class="publish-assignment">
-    <!-- 左侧固定菜单栏 -->
-    <TeacherSidebar class="left-menu" activeMenu="course-management" />
-
-    <!-- 右侧主内容区 -->
-    <el-container class="main-content">
-      <el-header class="header">
-        <h2>发布作业</h2>
+  <PageContainer>
+    <div class="header">
+      <h2>发布作业</h2>
+    </div>
+    
+    <el-card class="form-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <span>作业信息</span>
+        </div>
+      </template>
+      
+      <el-form 
+        @submit.prevent="createAssignment" 
+        class="assignment-form" 
+        :model="assignmentForm" 
+        label-width="120px"
+      >
+        <el-form-item label="作业标题" prop="title" required>
+          <el-input
+            v-model="assignmentForm.title"
+            placeholder="请输入作业标题"
+          />
+        </el-form-item>
         
-      </el-header>
-      <el-main class="content-container">
-        <el-card class="form-card" shadow="hover">
-          <h3>作业信息</h3>
-          
-          <div v-if="error" class="error-message">{{ error }}</div>
-          <div v-if="success" class="success-message">{{ success }}</div>
-          
-          <el-form @submit.prevent="createAssignment" class="assignment-form" :model="assignmentForm" label-width="120px">
-            <el-form-item label="作业标题" prop="title" required>
+        <el-form-item label="作业类型" prop="type" required>
+          <el-select
+            v-model="assignmentForm.type"
+            placeholder="请选择作业类型"
+            class="w-full"
+          >
+            <el-option label="作业" value="ASSIGNMENT" />
+            <el-option label="测验" value="QUIZ" />
+            <el-option label="项目" value="PROJECT" />
+          </el-select>
+        </el-form-item>
+        
+        <el-form-item label="发布时间" required>
+          <el-date-picker
+            v-model="tempReleaseAt"
+            type="datetime"
+            placeholder="选择发布时间"
+            format="YYYY-MM-DD HH:mm:ss"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            class="w-full"
+            @change="handleReleaseAtChange"
+          />
+        </el-form-item>
+        
+        <el-form-item label="截止时间" required>
+          <el-date-picker
+            v-model="tempDeadline"
+            type="datetime"
+            placeholder="选择截止时间"
+            format="YYYY-MM-DD HH:mm:ss"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            class="w-full"
+            @change="handleDeadlineChange"
+          />
+        </el-form-item>
+        
+        <el-form-item label="允许重新提交">
+          <el-checkbox
+            v-model="assignmentForm.allowResubmit"
+          >允许重新提交</el-checkbox>
+        </el-form-item>
+        
+        <el-form-item label="最大重交次数" required>
+          <el-input-number
+            v-model="assignmentForm.maxResubmit"
+            :min="0"
+            class="w-full"
+          />
+        </el-form-item>
+        
+        <el-form-item label="评分标准">
+          <div class="rubric-container">
+            <div v-for="(rubric, index) in assignmentForm.gradingRubric" :key="index" class="rubric-item">
               <el-input
-                v-model="assignmentForm.title"
-                placeholder="请输入作业标题"
+                v-model="rubric.criterion"
+                placeholder="评分项"
+                style="flex: 1; margin-right: 10px"
               />
-            </el-form-item>
-            
-            <el-form-item label="作业类型" prop="type" required>
-              <el-select
-                v-model="assignmentForm.type"
-                placeholder="请选择作业类型"
-              >
-                <el-option label="作业" value="ASSIGNMENT" />
-                <el-option label="测验" value="QUIZ" />
-                <el-option label="项目" value="PROJECT" />
-              </el-select>
-            </el-form-item>
-            
-            <el-form-item label="发布时间" required>
-              <el-date-picker
-                v-model="tempReleaseAt"
-                type="datetime"
-                placeholder="选择发布时间"
-                format="YYYY-MM-DD HH:mm:ss"
-                value-format="YYYY-MM-DDTHH:mm:ss"
-                style="width: 100%"
-                @change="handleReleaseAtChange"
-              />
-            </el-form-item>
-            
-            <el-form-item label="截止时间" required>
-              <el-date-picker
-                v-model="tempDeadline"
-                type="datetime"
-                placeholder="选择截止时间"
-                format="YYYY-MM-DD HH:mm:ss"
-                value-format="YYYY-MM-DDTHH:mm:ss"
-                style="width: 100%"
-                @change="handleDeadlineChange"
-              />
-            </el-form-item>
-            
-            <el-form-item label="允许重新提交">
-              <el-checkbox
-                v-model="assignmentForm.allowResubmit"
-              >允许重新提交</el-checkbox>
-            </el-form-item>
-            
-            <el-form-item label="最大重新提交次数" required>
               <el-input-number
-                v-model="assignmentForm.maxResubmit"
+                v-model="rubric.weight"
+                :step="0.1"
                 :min="0"
-                style="width: 100%"
+                :max="1"
+                placeholder="权重"
+                style="width: 150px; margin-right: 10px"
               />
-            </el-form-item>
-            
-            <el-form-item label="评分标准">
-              <div v-for="(rubric, index) in assignmentForm.gradingRubric" :key="index" class="rubric-item">
-                <el-input
-                  v-model="rubric.criterion"
-                  placeholder="评分项"
-                  style="flex: 1; margin-right: 10px"
-                />
-                <el-input-number
-                  v-model="rubric.weight"
-                  :step="0.1"
-                  :min="0"
-                  :max="1"
-                  placeholder="权重"
-                  style="width: 150px"
-                />
-              </div>
-            </el-form-item>
-            
-            <el-form-item label="可见班级/分组">
-              <el-input
-                v-model="visibleToInput"
-                placeholder="请输入班级/分组名称，多个用逗号分隔"
-                @input="(value) => assignmentForm.visibility.visibleTo = value.split(',').map(item => item.trim()).filter(Boolean)"
-              />
-            </el-form-item>
-            
-            <el-form-item class="form-actions">
-              <el-button type="default" @click="router.back()">取消</el-button>
-              <el-button type="primary" @click="createAssignment">发布作业</el-button>
-            </el-form-item>
-          </el-form>
-        </el-card>
-      </el-main>
-    </el-container>
-  </div>
+              <el-button type="danger" circle size="small" @click="removeRubricItem(index)">
+                <el-icon>x</el-icon>
+              </el-button>
+            </div>
+            <el-button type="primary" plain size="small" @click="addRubricItem" style="margin-top: 10px">
+              添加评分项
+            </el-button>
+          </div>
+        </el-form-item>
+        
+        <el-form-item label="可见班级/分组">
+          <el-input
+            v-model="visibleToInput"
+            placeholder="请输入班级/分组名称，多个用逗号分隔"
+            @input="(value: string) => assignmentForm.visibility.visibleTo = value.split(',').map(item => item.trim()).filter(Boolean)"
+          />
+        </el-form-item>
+        
+        <el-form-item>
+          <div class="form-actions">
+            <el-button @click="router.back()">取消</el-button>
+            <el-button type="primary" @click="createAssignment" :loading="loading">发布作业</el-button>
+          </div>
+        </el-form-item>
+      </el-form>
+    </el-card>
+  </PageContainer>
 </template>
 
 <style scoped>
-
-.left-menu {
-  width: 260px;       /* 固定宽度 */
-  flex-shrink: 0;     /* 不允许缩小 */
-}
-.main-content {
-  margin-left: 25%;
-  flex: 1;
-  height: 100vh;
-  overflow-y: hidden;
- 
-}
-
-@media (max-width: 768px) {
-  .main-content {
-    margin-left: 60px;
-  }
-}
-
 .header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 30px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--space-6);
 }
 
 .header h2 {
+  font-size: 1.75rem;
+  color: var(--text-primary);
   margin: 0;
-  font-size: 1.8rem;
-  font-weight: 600;
-}
-
-.logout-btn {
-  color: white;
-  font-size: 1rem;
-}
-
-.content-container {
-  padding: 30px;
-  background-color: #f5f7fa;
 }
 
 .form-card {
-  border-radius: 16px;
-  padding: 30px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid #eef2f7;
-  max-width: 1200px;
+  max-width: 800px;
   margin: 0 auto;
 }
 
-.form-card h3 {
-  margin: 0 0 25px 0;
-  color: #2d3748;
-  font-size: 1.4rem;
-  font-weight: 700;
+.card-header {
+  font-weight: bold;
 }
 
-.error-message {
-  background-color: #fee2e2;
-  color: #ef4444;
-  padding: 15px;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  font-size: 0.95rem;
+.w-full {
+  width: 100%;
 }
 
-.success-message {
-  background-color: #d1fae5;
-  color: #065f46;
-  padding: 15px;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  font-size: 0.95rem;
-}
-
-.assignment-form {
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
+.rubric-container {
+  width: 100%;
 }
 
 .rubric-item {
   display: flex;
-  gap: 15px;
-  margin-bottom: 10px;
   align-items: center;
+  margin-bottom: 10px;
 }
 
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 15px;
-  margin-top: 15px;
-  padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
+  width: 100%;
+  gap: 10px;
 }
 </style>

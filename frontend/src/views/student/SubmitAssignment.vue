@@ -1,12 +1,7 @@
 <template>
-  <div class="submit-assignment">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-      <div class="content">
-        <!-- 页面标题 -->
-        <div class="page-header">
+  <div class="submit-assignment-page">
+    <!-- 页面标题 -->
+    <div class="page-header">
           <div class="header-actions">
             <button class="back-btn" @click="goBack">
               ← 返回作业列表
@@ -130,8 +125,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -139,7 +132,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -176,38 +168,16 @@ const isSubmitting = ref(false)
 const assignmentText = ref('')
 const uploadedFiles = ref<File[]>([])
 const uploadedFileUrls = ref<string[]>([])
+import { useStudentAuthStore } from '../../stores/auth_student'
 
+const authStore = useStudentAuthStore()
+const token = authStore.token
 // API配置
 const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
 const UPLOAD_API_BASE_URL = 'http://10.70.141.134:5000/api/v1'
 
-// 获取token
-const getToken = () => {
-  return localStorage.getItem('Stoken')
-}
 
-// 检查token有效性
-const checkAuth = () => {
-  const token = getToken()
-  console.log('检查认证状态，token存在:', !!token)
-  if (!token) {
-    // 在开发环境下不自动跳转，便于调试
-    if (import.meta.env.DEV) {
-      console.log('开发环境：未找到token，但不跳转')
-      return false
-    }
-    router.push('/student')
-    return false
-  }
-  return true
-}
 
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('Stoken')
-  localStorage.removeItem('user')
-  router.push('/student')
-}
 
 // 返回上一页
 const goBack = () => {
@@ -227,13 +197,12 @@ const formatDate = (dateString: string) => {
 
 // 获取作业详情
 const fetchAssignmentDetails = async () => {
-  if (!checkAuth() || !assignmentId.value) return
+  if ( !assignmentId.value) return
   
   loading.value = true
   error.value = ''
   
   try {
-    const token = getToken()
     const response = await axios.get(`${API_BASE_URL}/assignments/${assignmentId.value}`, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -245,39 +214,6 @@ const fetchAssignmentDetails = async () => {
     console.error('Failed to fetch assignment details:', err)
     error.value = '获取作业信息失败'
     
-    // 开发环境下使用模拟数据
-    if (import.meta.env.DEV) {
-      console.log('开发环境：使用模拟数据')
-      assignment.value = {
-        "id": assignmentId.value,
-        "courseId": "fe099f4e-eb3c-4ded-90ee-b8b37f8b2dab",
-        "title": "快速排序",
-        "type": "ASSIGNMENT",
-        "deadline": "2025-11-27T05:53:23Z",
-        "allowResubmit": true,
-        "maxResubmit": 5,
-        "gradingRubric": [
-          {
-            "criterion": "正确性",
-            "weight": 0.7
-          },
-          {
-            "criterion": "代码规范",
-            "weight": 0.1
-          },
-          {
-            "criterion": "创新性",
-            "weight": 0.2
-          }
-        ],
-        "visibilityTags": ["2501"],
-        "releaseAt": "2025-11-20T05:53:23Z",
-        "published": true,
-        "publishedAt": "2025-11-20T05:55:03.334928Z",
-        "createdAt": "2025-11-20T05:55:03.289945Z",
-        "updatedAt": "2025-11-20T05:55:03.339397Z"
-      }
-    }
   } finally {
     loading.value = false
   }
@@ -349,7 +285,6 @@ const submitAssignment = async () => {
     }
     
     // 提交作业
-    const token = getToken()
     await axios.post(`${API_BASE_URL}/assignments/${assignment.value.id}/submissions`, 
       { attachments },
       {
@@ -365,7 +300,18 @@ const submitAssignment = async () => {
     router.back()
   } catch (err: any) {
     console.error('作业提交失败:', err)
-    alert('作业提交失败，请重试')
+    
+    // 处理409状态码
+    if (err.response && err.response.status === 409) {
+      // 根据服务器返回的具体错误信息显示不同提示
+      if (err.response.data.message) {
+        alert('作业未开放、已过截止时间或重复提交，请检查后重试')
+      } else {
+        alert('作业未开放、已过截止时间或重复提交，请检查后重试')
+      }
+    } else {
+      alert('作业提交失败，请重试')
+    }
   } finally {
     isSubmitting.value = false
   }
@@ -797,11 +743,6 @@ onMounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 1024px) {
-  .main-content {
-    margin-left: 0;
-    width: 100vw;
-  }
-  
   .info-meta {
     flex-direction: column;
     align-items: flex-start;
@@ -810,9 +751,6 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .content {
-    padding: 20px;
-  }
   
   .info-header {
     flex-direction: column;

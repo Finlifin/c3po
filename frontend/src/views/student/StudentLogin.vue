@@ -1,170 +1,212 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import router from '../../router'
-import axios from 'axios'
+import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+import { useStudentAuthStore } from '../../stores/auth_student'
+import { authApi } from '../../api/auth'
+import { ElMessage } from 'element-plus'
+import { User, Lock, ArrowLeft } from '@element-plus/icons-vue'
+
+const router = useRouter()
+const authStore = useStudentAuthStore()
 
 // Form data
 const isLoginMode = ref(true)
-const username = ref('')
-const email = ref('')
-const password = ref('')
-const confirmPassword = ref('')
-const error = ref('')
+const loading = ref(false)
 
-// API configuration
-const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
+const loginForm = reactive({
+  username: 'student003',
+  password: 'student003'
+})
+
+const registerForm = reactive({
+  username: '',
+  email: '',
+  password: '',
+  confirmPassword: ''
+})
 
 // Toggle between login and register modes
 const toggleMode = () => {
   isLoginMode.value = !isLoginMode.value
-  error.value = ''
+  // Reset forms
+  loginForm.username = ''
+  loginForm.password = ''
+  registerForm.username = ''
+  registerForm.email = ''
+  registerForm.password = ''
+  registerForm.confirmPassword = ''
 }
 
-// Handle form submission
-const handleSubmit = async () => {
-  error.value = ''
+// Handle login
+const handleLogin = async () => {
+  if (!loginForm.username || !loginForm.password) {
+    ElMessage.warning('请填写完整的登录信息')
+    return
+  }
+
+  loading.value = true
+  try {
+    await authStore.login({
+      identifier: loginForm.username,
+      password: loginForm.password
+    })
+    
+    ElMessage.success('登录成功')
+    router.push('/student/dashboard')
+  } catch (err: any) {
+    console.error('Login error:', err)
+    ElMessage.error(err.response?.data?.message || '登录失败，请检查用户名和密码')
+  } finally {
+    loading.value = false
+  }
+}
+
+// Handle register
+const handleRegister = async () => {
+  if (!registerForm.username || !registerForm.email || !registerForm.password || !registerForm.confirmPassword) {
+    ElMessage.warning('请填写完整的注册信息')
+    return
+  }
   
-  // Validation
-  if (isLoginMode.value) {
-    if (!username.value || !password.value) {
-      error.value = '请填写完整的登录信息'
-      return
-    }
+  if (registerForm.password !== registerForm.confirmPassword) {
+    ElMessage.warning('两次输入的密码不一致')
+    return
+  }
+
+  loading.value = true
+  try {
+    const response = await authApi.register({
+      username: registerForm.username,
+      email: registerForm.email,
+      password: registerForm.password,
+    })
     
-    try {
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
-        identifier: username.value,
-        password: password.value
-      })
-      
-      // Save token
-      localStorage.setItem('Stoken', response.data.accessToken)
-      localStorage.setItem('StokenType', response.data.tokenType)
-      localStorage.setItem('SexpiresIn', response.data.expiresIn.toString())
-      
-      // Redirect to student page
-      router.push('/student/dashboard')
-    } catch (err: any) {
-      error.value = err.response?.data?.message || '登录失败，请检查用户名和密码'
-    }
-  } else {
-    if (!username.value || !email.value || !password.value || !confirmPassword.value) {
-      error.value = '请填写完整的注册信息'
-      return
-    }
+    // Auto login after register
+    authStore.setToken(response.data.accessToken)
+    await authStore.fetchUserInfo()
     
-    if (password.value !== confirmPassword.value) {
-      error.value = '两次输入的密码不一致'
-      return
-    }
-    
-    try {
-      const response = await axios.post(`${API_BASE_URL}/auth/register`, {
-        username: username.value,
-        email: email.value,
-        password: password.value,
-        // For student registration, role is not needed according to API docs
-      })
-      
-      // Save token
-      localStorage.setItem('Stoken', response.data.accessToken)
-      localStorage.setItem('StokenType', response.data.tokenType)
-      localStorage.setItem('SexpiresIn', response.data.expiresIn.toString())
-      
-      // Redirect to student page
-      router.push('/student/dashboard')
-    } catch (err: any) {
-      error.value = err.response?.data?.message || '注册失败，请检查信息是否正确'
-    }
+    ElMessage.success('注册成功')
+    router.push('/student/dashboard')
+  } catch (err: any) {
+    console.error('Register error:', err)
+    ElMessage.error(err.response?.data?.message || '注册失败')
+  } finally {
+    loading.value = false
   }
 }
 </script>
 
 <template>
   <div class="student-login-container">
-    <div class="background-image">
-      <!-- 可以在这里添加背景图片 -->
-    </div>
-    <div class="login-card">
-      <div class="logo">
-        <img src="/assets/student-logo.svg" alt="学生Logo">
-      </div>
-      <div class="title">
+    <div class="login-box">
+      <div class="login-header">
+        <div class="logo-placeholder">
+          <el-icon :size="50" color="#409eff"><User /></el-icon>
+        </div>
         <h2>{{ isLoginMode ? '学生登录' : '学生注册' }}</h2>
+        <p class="subtitle">C3PO 智慧学习平台</p>
       </div>
-      
-      <div class="form-container">
-        <div v-if="error" class="error-message">{{ error }}</div>
-        
-        <!-- Username field -->
-        <div class="input-group">
-          <label for="username">用户名</label>
-          <input 
-            id="username"
-            type="text"
-            placeholder="请输入用户名"
-            v-model="username"
-            required
+
+      <div class="form-wrapper">
+        <!-- Login Form -->
+        <el-form v-if="isLoginMode" :model="loginForm" @submit.prevent="handleLogin" label-position="top">
+          <el-form-item label="用户名/邮箱">
+            <el-input 
+              v-model="loginForm.username" 
+              placeholder="请输入用户名或邮箱" 
+              :prefix-icon="User"
+              size="large"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input 
+              v-model="loginForm.password" 
+              type="password" 
+              placeholder="请输入密码" 
+              :prefix-icon="Lock"
+              show-password
+              size="large"
+              @keyup.enter="handleLogin"
+            />
+          </el-form-item>
+          <el-button 
+            type="primary" 
+            class="submit-btn" 
+            :loading="loading" 
+            @click="handleLogin" 
+            size="large"
           >
-        </div>
-        
-        <!-- Email field (only in register mode) -->
-        <div v-if="!isLoginMode" class="input-group">
-          <label for="email">邮箱</label>
-          <input 
-            id="email"
-            type="email"
-            placeholder="请输入邮箱"
-            v-model="email"
-            required
+            {{ loading ? '登录中...' : '登录' }}
+          </el-button>
+        </el-form>
+
+        <!-- Register Form -->
+        <el-form v-else :model="registerForm" @submit.prevent="handleRegister" label-position="top">
+          <el-form-item label="用户名">
+            <el-input 
+              v-model="registerForm.username" 
+              placeholder="请输入用户名" 
+              :prefix-icon="User"
+              size="large"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="邮箱">
+            <el-input 
+              v-model="registerForm.email" 
+              type="email"
+              placeholder="请输入邮箱" 
+              :prefix-icon="User"
+              size="large"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input 
+              v-model="registerForm.password" 
+              type="password" 
+              placeholder="请输入密码" 
+              :prefix-icon="Lock"
+              show-password
+              size="large"
+            />
+          </el-form-item>
+          <el-form-item label="确认密码">
+            <el-input 
+              v-model="registerForm.confirmPassword" 
+              type="password" 
+              placeholder="请再次输入密码" 
+              :prefix-icon="Lock"
+              show-password
+              size="large"
+              @keyup.enter="handleRegister"
+            />
+          </el-form-item>
+          <el-button 
+            type="primary" 
+            class="submit-btn" 
+            :loading="loading" 
+            @click="handleRegister" 
+            size="large"
           >
-        </div>
-        
-        <!-- Password field -->
-        <div class="input-group">
-          <label for="password">密码</label>
-          <input 
-            id="password"
-            type="password"
-            placeholder="请输入密码"
-            v-model="password"
-            required
-          >
-        </div>
-        
-        <!-- Confirm password field (only in register mode) -->
-        <div v-if="!isLoginMode" class="input-group">
-          <label for="confirmPassword">确认密码</label>
-          <input 
-            id="confirmPassword"
-            type="password"
-            placeholder="请再次输入密码"
-            v-model="confirmPassword"
-            required
-          >
-        </div>
-        
-        <!-- Submit button -->
-        <div class="button-group">
-          <button class="submit-btn" @click="handleSubmit">
-            {{ isLoginMode ? '登录' : '注册' }}
-          </button>
-        </div>
-        
-        <!-- Toggle mode link -->
-        <div class="toggle-link">
+            {{ loading ? '注册中...' : '注册' }}
+          </el-button>
+        </el-form>
+
+        <div class="form-footer">
           <span v-if="isLoginMode">还没有账号？</span>
           <span v-else>已经有账号？</span>
-          <button class="link-btn" @click="toggleMode">
+          <el-button text @click="toggleMode" type="primary">
             {{ isLoginMode ? '立即注册' : '立即登录' }}
-          </button>
+          </el-button>
         </div>
-        
-        <!-- Back to home button -->
-        <div class="back-button">
-          <button class="back-btn" @click="router.push('/')">
+
+        <div class="back-home">
+          <el-button text @click="router.push('/')">
+            <el-icon><ArrowLeft /></el-icon>
             返回首页
-          </button>
+          </el-button>
         </div>
       </div>
     </div>
@@ -182,156 +224,167 @@ const handleSubmit = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  box-sizing: border-box;
 }
 
-.background-image {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.1;
-  background: url('/assets/student-background.svg') center center no-repeat;
-  background-size: cover;
-}
-
-.login-card {
-  position: relative;
+.login-box {
   background: white;
   border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  padding: 40px;
-  width: 400px;
-  max-width: 90%;
-  z-index: 1;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 480px;
+  padding: 50px 40px;
+  transition: all 0.3s ease;
+  animation: slideUp 0.5s ease;
 }
 
-.logo img {
-  width: 120px;
-  height: 120px;
-  margin: 0 auto 20px;
-  display: block;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.title h2 {
+.login-header {
   text-align: center;
-  color: #333;
-  font-size: 1.8rem;
-  margin-bottom: 30px;
+  margin-bottom: 40px;
 }
 
-.form-container {
+.logo-placeholder {
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 25px;
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.logo-placeholder :deep(.el-icon) {
+  color: white !important;
+}
+
+.login-header h2 {
+  color: #303133;
+  font-size: 2rem;
+  margin: 0 0 12px;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: #909399;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.form-wrapper {
   width: 100%;
 }
 
-.input-group {
-  margin-bottom: 20px;
+.form-wrapper :deep(.el-form-item) {
+  margin-bottom: 24px;
 }
 
-.input-group label {
-  display: block;
-  color: #555;
-  font-weight: 500;
+.form-wrapper :deep(.el-form-item__label) {
+  color: #606266;
+  font-weight: 600;
+  font-size: 0.95rem;
   margin-bottom: 8px;
 }
 
-.input-group input {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s ease;
+.form-wrapper :deep(.el-input__wrapper) {
+  padding: 12px 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
-.input-group input:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+.form-wrapper :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.15);
 }
 
-.error-message {
-  background-color: #fff3f3;
-  border: 1px solid #f87171;
-  color: #dc2626;
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  text-align: center;
-  font-size: 0.9rem;
-}
-
-.button-group {
-  margin-bottom: 20px;
+.form-wrapper :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
 .submit-btn {
   width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
+  margin-top: 10px;
   font-size: 1.1rem;
   font-weight: 600;
-  cursor: pointer;
+  height: 48px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
   transition: all 0.3s ease;
 }
 
 .submit-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
 }
 
-.toggle-link {
+.submit-btn:active {
+  transform: translateY(0);
+}
+
+.form-footer {
+  margin-top: 30px;
   text-align: center;
-  margin-bottom: 20px;
-  color: #666;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  color: #606266;
+  padding-top: 25px;
+  border-top: 1px solid #f0f0f0;
 }
 
-.link-btn {
-  background: none;
-  border: none;
+.form-footer a {
   color: #667eea;
+  text-decoration: none;
   font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  margin-left: 5px;
+  transition: color 0.3s ease;
 }
 
-.link-btn:hover {
+.form-footer a:hover {
+  color: #764ba2;
   text-decoration: underline;
 }
 
-.back-button {
+.back-home {
+  margin-top: 20px;
   text-align: center;
 }
 
-.back-btn {
-  background: none;
-  border: 1px solid #ddd;
-  color: #666;
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
+.back-home :deep(.el-button) {
+  color: #909399;
   font-size: 0.9rem;
-  transition: all 0.3s ease;
 }
 
-.back-btn:hover {
-  background-color: #f9fafb;
-  border-color: #ccc;
+.back-home :deep(.el-button:hover) {
+  color: #667eea;
 }
 
 @media (max-width: 768px) {
-  .login-card {
-    padding: 20px;
+  .login-box {
+    padding: 40px 30px;
+    max-width: 95%;
   }
-  
-  .title h2 {
-    font-size: 1.5rem;
+
+  .login-header h2 {
+    font-size: 1.6rem;
+  }
+
+  .logo-placeholder {
+    width: 80px;
+    height: 80px;
   }
 }
 </style>

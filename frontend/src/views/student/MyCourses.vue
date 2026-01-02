@@ -1,8 +1,18 @@
 <script setup lang="ts">
-import router from '../../router'
-import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useStudentAuthStore } from '../../stores/auth_student'
+import { studentApi } from '../../api/student'
+import PageContainer from '../../components/layout/PageContainer.vue'
+import ContentGrid from '../../components/layout/ContentGrid.vue'
+import request from '../../utils/request'
+import { ElMessage } from 'element-plus'
+
+const router = useRouter()
+const authStore = useStudentAuthStore()
+
+// User data
+const user = computed(() => authStore.user)
 
 // 学生课程响应数据类型
 interface StudentCourseResponse {
@@ -16,97 +26,34 @@ interface StudentCourseResponse {
   totalAssignments: number
 }
 
-// 用户信息类型
-interface UserInfo {
-  id: string
-  username: string
-  role: string
-}
-
 // 状态变量
 const courses = ref<StudentCourseResponse[]>([])
-const userInfo = ref<UserInfo | null>(null)
 const loading = ref(false)
 const error = ref('')
 
-// API配置
-const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
-
-// 获取token
-const getToken = () => {
-  return localStorage.getItem('Stoken')
-}
-
-// 检查token有效性
-const checkAuth = () => {
-  const token = getToken()
-  console.log('检查认证状态，token存在:', !!token)
-  if (!token) {
-    // 在开发环境下不自动跳转，便于调试
-    if (import.meta.env.DEV) {
-      console.log('开发环境：未找到token，但不跳转')
-      return false
-    }
-    router.push('/student')
-    return false
-  }
-  return true
-}
-
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  router.push('/student')
-}
-
-// 获取用户信息
-const fetchUserInfo = async () => {
-  if (!checkAuth()) return
-  
-  try {
-    const token = getToken()
-    const response = await axios.get(`${API_BASE_URL}/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-    // 直接使用response.data获取用户信息，无需嵌套的data属性
-    userInfo.value = response.data
-    return userInfo.value
-  } catch (err: any) {
-    console.error('Failed to fetch user info:', err)
-    error.value = '获取用户信息失败'
-    return null
-  }
-}
+// AI解析相关状态
+const aiDrawerVisible = ref(false)
+const aiLoading = ref(false)
+const currentCourse = ref<StudentCourseResponse | null>(null)
+const aiResponse = ref<any>(null)
+const aiMessage = ref('这门课有什么？')
 
 // 获取学生已选课程
 const fetchEnrolledCourses = async () => {
-  const isAuthenticated = checkAuth()
-  console.log('开始获取课程数据，认证状态:', isAuthenticated)
-  
   loading.value = true
   error.value = ''
   
   try {
-    // 先获取用户信息以获取studentId
-    const user = await fetchUserInfo()
-    if (!user) {
-      // 无法获取用户信息，直接抛出错误
+    if (!user.value?.id) {
+      await authStore.fetchUserInfo()
+    }
+    
+    if (!user.value?.id) {
       throw new Error('无法获取用户信息')
     }
     
-    const token = getToken()
-    console.log('准备发送API请求:', `${API_BASE_URL}/students/${user.id}/courses`)
-    const response = await axios.get(`${API_BASE_URL}/students/${user.id}/courses`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    const response = await studentApi.getMyCourses(user.value.id)
     
-    // 检查响应数据格式，确保能正确提取课程数组
-    console.log('API请求成功，返回数据:', response.data)
     let courseData: StudentCourseResponse[] = []
     
     // 如果response.data本身是数组，直接使用
@@ -132,7 +79,6 @@ const fetchEnrolledCourses = async () => {
     console.error('Failed to fetch enrolled courses:', err)
   } finally {
     loading.value = false
-    console.log('获取课程数据完成，加载状态:', loading.value)
   }
 }
 
@@ -144,6 +90,61 @@ const learnCourse = (courseId: string) => {
 // 跳转到作业/测试列表页面
 const viewAssignments = (courseId: string) => {
   router.push(`/student/courses/${courseId}/assignments`)
+}
+
+// 打开AI解析抽屉
+const openAiDrawer = (course: StudentCourseResponse) => {
+  currentCourse.value = course
+  aiResponse.value = null
+  aiDrawerVisible.value = true
+  // 默认发送请求
+  setTimeout(() => {
+    sendAiRequest()
+  }, 1000)
+}
+
+// 发送AI请求
+const sendAiRequest = async () => {
+  if (!currentCourse.value) return
+  
+  aiLoading.value = true
+  
+  try {
+    const response = await request({
+      url: 'http://10.70.141.134:8080/api/v1/assistant/chat',
+      method: 'post',
+      data: {
+        context: {
+          courseId: currentCourse.value.courseId
+        },
+        messages: [
+          {
+            role: 'USER',
+            content: aiMessage.value
+          }
+        ],
+        preferences: {
+          language: 'zh-CN',
+          style: 'EDUCATIONAL',
+          maxLength: 2000,
+          includeReferences: true,
+          includeSuggestions: true
+        },
+        stream: false
+      }
+    })
+    
+    if (response.data.success) {
+      aiResponse.value = response.data.data
+    } else {
+      ElMessage.error('AI解析失败: ' + response.data.error?.message || '未知错误')
+    }
+  } catch (err: any) {
+    console.error('AI request failed:', err)
+    ElMessage.error('AI解析请求失败: ' + err.response?.data?.message || '网络错误')
+  } finally {
+    aiLoading.value = false
+  }
 }
 
 // 页面加载时获取数据
@@ -188,47 +189,44 @@ const getStatusText = (status: string): string => {
       return status
   }
 }
+
 </script>
 
 <template>
-  <div class="my-courses">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-      <div class="content">
-        <!-- 页面标题 -->
-        <div class="page-header">
-          <h1>我的课程</h1>
-          <p v-if="userInfo">
-            欢迎，{{ userInfo.username }}！以下是您当前选修的课程列表。
-          </p>
-        </div>
-        <!-- 加载状态和错误提示 -->
-        <div v-if="loading" class="loading-state">
-          <div class="loading-spinner"></div>
-          <p>正在加载课程信息...</p>
-        </div>
-        <div v-else-if="error" class="error-state">
-          <div class="error-icon">⚠️</div>
-          <p class="error-message">{{ error }}</p>
-          <button class="retry-btn" @click="fetchEnrolledCourses">重新加载</button>
-        </div>
-        <!-- 课程列表 -->
-        <div v-else-if="courses.length === 0" class="empty-state">
-          <div class="empty-icon">📚</div>
-          <h3>暂无选修课程</h3>
-          <p>您还没有选修任何课程，请前往选课页面浏览并选择课程。</p>
-          <button class="go-selection-btn" @click="router.push('/student/course-selection')">
-            去选课
-          </button>
-        </div>
-        <div v-else class="courses-container">
-          <div 
-            v-for="course in courses" 
-            :key="course.courseId"
-            class="course-card"
-          >
+  <PageContainer>
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>我的课程</h1>
+      <p v-if="user">
+        欢迎，{{ user.username }}！以下是您当前选修的课程列表。
+      </p>
+    </div>
+    <!-- 加载状态和错误提示 -->
+    <div v-if="loading" class="loading-state">
+      <div class="loading-spinner"></div>
+      <p>正在加载课程信息...</p>
+    </div>
+    <div v-else-if="error" class="error-state">
+      <div class="error-icon">⚠️</div>
+      <p class="error-message">{{ error }}</p>
+      <button class="retry-btn" @click="fetchEnrolledCourses">重新加载</button>
+    </div>
+    <!-- 课程列表 -->
+    <div v-else-if="courses.length === 0" class="empty-state">
+      <div class="empty-icon">📚</div>
+      <h3>暂无选修课程</h3>
+      <p>您还没有选修任何课程，请前往选课页面浏览并选择课程。</p>
+      <button class="go-selection-btn" @click="router.push('/student/course-selection')">
+        去选课
+      </button>
+    </div>
+    <ContentGrid v-else min-width="350px" gap="md" :columns="{ xs: 1, sm: 1, md: 2, lg: 3 }">
+      <el-card
+        v-for="course in courses" 
+        :key="course.courseId"
+        class="course-card"
+        shadow="hover"
+      >
             <div class="course-header">
               <h3 class="course-name">{{ course.name }}</h3>
               <span :class="['course-status', getStatusClass(course.status)]">
@@ -290,55 +288,99 @@ const getStatusText = (status: string): string => {
               >
                 查看作业/测试
               </button>
+              <button 
+                class="ai-btn" 
+                @click="openAiDrawer(course)"
+                :disabled="course.status !== 'PUBLISHED'"
+              >
+                AI解析
+              </button>
             </div>
+          </el-card>
+    </ContentGrid>
+    
+    <!-- AI解析抽屉 -->
+    <el-drawer
+      v-model="aiDrawerVisible"
+      title="课程AI解析"
+      direction="rtl"
+      size="60%"
+    >
+      <div v-if="currentCourse" class="ai-drawer-content">
+        <div class="ai-course-info">
+          <h3>{{ currentCourse.name }}</h3>
+          <p class="course-id">课程ID: {{ currentCourse.courseId }}</p>
+        </div>
+        
+        <div class="ai-input-section">
+          <el-input
+            v-model="aiMessage"
+            type="textarea"
+            placeholder="请输入您的问题..."
+            :rows="3"
+            class="ai-message-input"
+          ></el-input>
+          <el-button 
+            type="primary" 
+            @click="sendAiRequest"
+            :loading="aiLoading"
+            class="ai-send-btn"
+          >
+            {{ aiLoading ? '发送中...' : '发送' }}
+          </el-button>
+        </div>
+        
+        <div class="ai-response-section">
+          <h4 class="response-title">AI解析结果</h4>
+          <div v-if="aiLoading" class="ai-loading">
+            <el-skeleton :rows="6" animated />
+          </div>
+          <div v-else-if="aiResponse" class="ai-response">
+            <div class="ai-answer" v-html="aiResponse.answer"></div>
+            
+            <div v-if="aiResponse.suggestions && aiResponse.suggestions.length > 0" class="ai-suggestions">
+              <h5>学习建议:</h5>
+              <ul>
+                <li v-for="(suggestion, index) in aiResponse.suggestions" :key="index">
+                  {{ suggestion.title }}
+                </li>
+              </ul>
+            </div>
+            
+            <div v-if="aiResponse.references && aiResponse.references.length > 0" class="ai-references">
+              <h5>参考资料:</h5>
+              <ul>
+                <li v-for="(reference, index) in aiResponse.references" :key="index">
+                  {{ reference }}
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div v-else class="ai-no-response">
+            <p>点击发送按钮获取AI解析结果</p>
           </div>
         </div>
       </div>
-    </div>
-  </div>
+    </el-drawer>
+  </PageContainer>
 </template>
 
 <style scoped>
-.my-courses {
-  width: 114%;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  display: flex;
-  overflow: hidden;
-}
-
-/* 右侧主内容 */
-.main-content {
-  flex: 1;
-  margin-left: 120px; /* 与侧边栏宽度一致 */
-  display: flex;
-  flex-direction: column;
-  width: calc(100vw - 280px);
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
-.content {
-  padding: 30px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
 /* 页面标题 */
 .page-header {
-  margin-bottom: 30px;
+  margin-bottom: var(--space-8);
 }
 
 .page-header h1 {
   font-size: 2rem;
-  color: #333;
-  margin: 0 0 10px 0;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
   font-weight: 700;
 }
 
 .page-header p {
-  font-size: 1.1rem;
-  color: #666;
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -348,18 +390,21 @@ const getStatusText = (status: string): string => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: var(--space-16) var(--space-5);
   text-align: center;
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  border: 4px solid var(--gray-200);
+  border-top: 4px solid var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 15px;
+  margin-bottom: var(--space-4);
 }
 
 @keyframes spin {
@@ -373,37 +418,39 @@ const getStatusText = (status: string): string => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: var(--space-16) var(--space-5);
   text-align: center;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
 }
 
 .error-icon {
   font-size: 3rem;
-  margin-bottom: 15px;
+  margin-bottom: var(--space-4);
 }
 
 .error-message {
-  font-size: 1.1rem;
-  color: #e74c3c;
-  margin-bottom: 20px;
+  font-size: var(--text-lg);
+  color: var(--error);
+  margin-bottom: var(--space-5);
 }
 
 .retry-btn {
-  padding: 10px 20px;
-  background-color: #667eea;
+  padding: var(--space-3) var(--space-5);
+  background-color: var(--primary);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
 .retry-btn:hover {
-  background-color: #5568d3;
+  background-color: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* 空状态 */
@@ -412,82 +459,73 @@ const getStatusText = (status: string): string => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: var(--space-16) var(--space-5);
   text-align: center;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
 }
 
 .empty-icon {
   font-size: 4rem;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .empty-state h3 {
   font-size: 1.5rem;
-  color: #333;
-  margin: 0 0 10px 0;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
 }
 
 .empty-state p {
-  font-size: 1.1rem;
-  color: #666;
-  margin: 0 0 20px 0;
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-5) 0;
   max-width: 500px;
 }
 
 .go-selection-btn {
-  padding: 12px 24px;
-  background-color: #667eea;
+  padding: var(--space-3) var(--space-6);
+  background-color: var(--primary);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
 .go-selection-btn:hover {
-  background-color: #5568d3;
-}
-
-/* 课程容器 */
-.courses-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 25px;
+  background-color: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* 课程卡片 */
 .course-card {
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-  transition: all 0.3s ease;
+  transition: all var(--transition-base);
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 .course-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .course-header {
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--gray-200);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
 }
 
 .course-name {
   font-size: 1.3rem;
-  color: #333;
+  color: var(--text-primary);
   margin: 0;
   font-weight: 600;
   flex: 1;
@@ -521,11 +559,11 @@ const getStatusText = (status: string): string => {
 }
 
 .course-body {
-  padding: 20px;
+  padding: var(--space-5);
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 .course-meta {
@@ -546,12 +584,12 @@ const getStatusText = (status: string): string => {
 }
 
 .meta-label {
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .meta-value {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .assignment-stats {
@@ -630,100 +668,223 @@ const getStatusText = (status: string): string => {
 }
 
 .rate-text {
-  font-size: 0.9rem;
-  color: #666;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .course-footer {
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
+  padding: var(--space-5);
+  border-top: 1px solid var(--gray-200);
   display: flex;
   justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .learn-btn {
-  padding: 10px 24px;
-  background-color: #667eea;
+  padding: var(--space-3) var(--space-6);
+  background-color: var(--primary);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
-  margin-right: 10px;
+  transition: all var(--transition-fast);
 }
 
 .learn-btn:hover:not(:disabled) {
-  background-color: #5568d3;
+  background-color: var(--primary-dark);
   transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .learn-btn:disabled {
-  background-color: #9e9e9e;
+  background-color: var(--gray-400);
   cursor: not-allowed;
   transform: none;
 }
 
 .assignments-btn {
-  padding: 10px 24px;
-  background-color: #4caf50;
+  padding: var(--space-3) var(--space-6);
+  background-color: var(--success);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all var(--transition-fast);
 }
 
 .assignments-btn:hover:not(:disabled) {
-  background-color: #43a047;
+  background-color: #0ea571;
   transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .assignments-btn:disabled {
-  background-color: #9e9e9e;
+  background-color: var(--gray-400);
   cursor: not-allowed;
   transform: none;
 }
 
-/* 响应式设计 */
-@media (max-width: 1024px) {
-  .courses-container {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  }
+/* AI按钮样式 */
+.ai-btn {
+  padding: var(--space-3) var(--space-6);
+  background-color: #9c27b0;
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
+.ai-btn:hover:not(:disabled) {
+  background-color: #7b1fa2;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.ai-btn:disabled {
+  background-color: var(--gray-400);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* AI抽屉样式 */
+.ai-drawer-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5);
+}
+
+.ai-course-info {
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.ai-course-info h3 {
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.course-id {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.ai-input-section {
+  margin-bottom: var(--space-6);
+}
+
+.ai-message-input {
+  margin-bottom: var(--space-3);
+}
+
+.ai-send-btn {
+  width: 100%;
+}
+
+.ai-response-section {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.response-title {
+  font-size: 1.2rem;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.ai-loading {
+  margin-bottom: var(--space-4);
+}
+
+.ai-response {
+  background-color: var(--bg-secondary);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.ai-answer {
+  line-height: 1.8;
+  margin-bottom: var(--space-5);
+}
+
+.ai-suggestions, .ai-references {
+  margin-top: var(--space-4);
+}
+
+.ai-suggestions h5, .ai-references h5 {
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.ai-suggestions ul, .ai-references ul {
+  padding-left: var(--space-6);
+  margin: 0;
+}
+
+.ai-suggestions li, .ai-references li {
+  margin-bottom: var(--space-2);
+  line-height: 1.6;
+}
+
+.ai-no-response {
+  text-align: center;
+  padding: var(--space-10);
+  color: var(--text-secondary);
+}
+
+/* 自定义Element Plus样式 */
+:deep(.el-card) {
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: var(--shadow-md);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 响应式设计 */
 @media (max-width: 768px) {
-  .main-content {
-    margin-left: 0;
-    width: 100%;
-  }
-  
-  .content {
-    padding: 15px;
-  }
-  
   .page-header h1 {
-    font-size: 1.8rem;
-  }
-  
-  .courses-container {
-    grid-template-columns: 1fr;
-    gap: 20px;
+    font-size: 1.5rem;
   }
   
   .course-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--space-2);
   }
   
   .stats-row {
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-2);
+  }
+  
+  .course-footer {
+    flex-direction: column;
+  }
+  
+  .learn-btn,
+  .assignments-btn,
+  .ai-btn {
+    width: 100%;
+  }
+  
+  .ai-drawer-content {
+    padding: var(--space-3);
   }
 }
 </style>

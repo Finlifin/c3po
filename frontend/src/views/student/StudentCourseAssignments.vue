@@ -1,10 +1,5 @@
 <template>
-  <div class="student-course-assignments">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-      <div class="content">
+  <div class="student-course-assignments-page">
         <!-- 页面标题 -->
         <div class="page-header">
           <div class="header-actions">
@@ -116,7 +111,7 @@
                       <span class="meta-label">附件数:</span>
                       <span class="meta-value">{{ getSubmissionByAssignmentId(assignment.id)?.attachments.length || 0 }}</span>
                     </div>
-                    <div class="meta-item" v-if="getSubmissionByAssignmentId(assignment.id)?.resubmitCount > 0">
+                    <div class="meta-item" v-if="(getSubmissionByAssignmentId(assignment.id)?.resubmitCount || 0) > 0">
                       <span class="meta-icon">🔄</span>
                       <span class="meta-label">重提交次数:</span>
                       <span class="meta-value">{{ getSubmissionByAssignmentId(assignment.id)?.resubmitCount }}/{{ assignment.maxResubmit }}</span>
@@ -152,8 +147,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
     
     <!-- 申诉弹窗 -->
     <div v-if="showAppealModal" class="modal-overlay" @click="closeAppealModal">
@@ -215,8 +208,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
+import { useStudentAuthStore } from '../../stores/auth_student'
 
+const authStore = useStudentAuthStore()
+const token = authStore.token
 const route = useRoute()
 const router = useRouter()
 
@@ -292,29 +287,14 @@ const appealError = ref('')
 // API配置
 const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
 
-// 获取token
-const getToken = () => {
-  return localStorage.getItem('Stoken')
-}
+
 
 // 获取学生ID
 const getStudentId = async () => {
-  // 首先尝试从localStorage获取
-  const userStr = localStorage.getItem('user')
-  if (userStr) {
-    try {
-      const user = JSON.parse(userStr)
-      return user.id || ''
-    } catch (e) {
-      console.error('解析用户信息失败:', e)
-    }
-  }
-  
+ 
   // 从API获取当前登录用户信息
   try {
-    const token = getToken()
-    if (!token) return ''
-    
+   
     // 使用指定的API地址
     const response = await axios.get('http://10.70.141.134:8080/api/v1/auth/me', {
       headers: {
@@ -340,28 +320,7 @@ const getStudentId = async () => {
   return ''
 }
 
-// 检查token有效性
-const checkAuth = () => {
-  const token = getToken()
-  console.log('检查认证状态，token存在:', !!token)
-  if (!token) {
-    // 在开发环境下不自动跳转，便于调试
-    if (import.meta.env.DEV) {
-      console.log('开发环境：未找到token，但不跳转')
-      return true // 开发环境下允许继续执行
-    }
-    router.push('/student')
-    return false
-  }
-  return true
-}
 
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  router.push('/student')
-}
 
 // 返回上一页
 const goBack = () => {
@@ -370,10 +329,9 @@ const goBack = () => {
 
 // 获取学生提交记录
 const fetchSubmissions = async () => {
-  if (!checkAuth() || !studentId.value) return
+  if (!studentId.value) return
   
   try {
-    const token = getToken()
     const response = await axios.get(`${API_BASE_URL}/students/${studentId.value}/submissions`, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -388,7 +346,7 @@ const fetchSubmissions = async () => {
 
 // 获取作业和测试数据
 const fetchAssignments = async () => {
-  if (!checkAuth() || !courseId.value) return
+  if (  !courseId.value) return
   
   loading.value = true
   error.value = ''
@@ -397,8 +355,6 @@ const fetchAssignments = async () => {
     // 获取学生ID
     studentId.value = await getStudentId()
     
-    // 获取作业列表
-    const token = getToken()
     const response = await axios.get(`${API_BASE_URL}/courses/${courseId.value}/assignments`, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -407,7 +363,6 @@ const fetchAssignments = async () => {
     
     assignments.value = response.data.data || []
     
-
     
     // 获取学生提交记录
     await fetchSubmissions()
@@ -581,7 +536,6 @@ const submitAppeal = async () => {
   appealSuccess.value = false
   
   try {
-    const token = getToken()
     const response = await axios.post(
       `${API_BASE_URL}/submissions/${currentSubmissionId.value}/appeal`,
       { reason: appealReason.value.trim() },
@@ -1310,11 +1264,6 @@ onMounted(async () => {
 
 /* 响应式设计 */
 @media (max-width: 1024px) {
-  .main-content {
-    margin-left: 0;
-    width: 100vw;
-  }
-  
   .assignment-meta {
     flex-direction: column;
     align-items: flex-start;
@@ -1323,9 +1272,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .content {
-    padding: 20px;
-  }
   
   .filter-container {
     flex-direction: column;

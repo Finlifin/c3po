@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import router from '../../router'
 import axios from 'axios'
-import StudentSidebar from '../../components/StudentSidebar.vue'
 import { onMounted, ref, watch } from 'vue'
+import { useStudentAuthStore } from '../../stores/auth_student'
 
+const authStore = useStudentAuthStore() 
+const token = authStore.token
 // 资源数据类型定义
 interface Resource {
   id: string
@@ -37,7 +39,22 @@ interface Course {
   updatedAt: string
 }
 
-// 学生课程相关接口已删除
+// AI总结响应数据类型定义
+interface AISummaryResponse {
+  traceId: string
+  success: boolean
+  data: {
+    conversationId: string
+    answer: string
+    references: any[]
+    suggestions: any[]
+    usage: {
+      promptTokens: number
+      completionTokens: number
+      totalTokens: number
+    }
+  }
+}
 
 // 状态变量
 const modules = ref<Module[]>([])
@@ -45,42 +62,23 @@ const course = ref<Course | null>(null)
 // courseStats 状态变量已删除
 const loading = ref(false)
 const error = ref('')
-const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
+// AI总结相关状态
+const aiLoading = ref(false)
+const aiSummary = ref<AISummaryResponse | null>(null)
+const selectedModuleId = ref<string | null>(null)
 
 // API配置
 const API_BASE_URL = 'http://10.70.141.134:8080/api/v1'
 
-// 获取token
-const getToken = () => {
-  return localStorage.getItem('Stoken')
-}
 
-// 检查token有效性
-const checkAuth = () => {
-  const token = getToken()
-  if (!token) {
-    router.push('/student')
-    return false
-  }
-  return true
-}
 
-// 处理退出登录
-const logout = () => {
-  localStorage.removeItem('Stoken')
-  localStorage.removeItem('user')
-  router.push('/student')
-}
 
 // 获取课程章节及资源
 const fetchCourseModules = async (courseId: string) => {
-  if (!checkAuth()) return
-  
   loading.value = true
   error.value = ''
   
   try {
-    const token = getToken()
     const response = await axios.get(`${API_BASE_URL}/courses/${courseId}/modules`, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -101,10 +99,9 @@ const fetchCourseModules = async (courseId: string) => {
 
 // 获取课程信息
 const fetchCourseInfo = async (courseId: string) => {
-  if (!checkAuth()) return
   
   try {
-    const token = getToken()
+    
     const response = await axios.get(`${API_BASE_URL}/courses/${courseId}`, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -115,6 +112,32 @@ const fetchCourseInfo = async (courseId: string) => {
     
   } catch (err: any) {
     console.error('Failed to fetch course info:', err)
+  }
+}
+
+// 获取AI总结
+const fetchAISummary = async (courseId: string, moduleId: string) => {
+  aiLoading.value = true
+  selectedModuleId.value = moduleId
+  
+  try {
+    const response = await axios.get(`${API_BASE_URL}/assistant/summary`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      params: {
+        courseId,
+        moduleId
+      }
+    })
+    
+    aiSummary.value = response.data
+    
+  } catch (err: any) {
+    console.error('Failed to fetch AI summary:', err)
+    error.value = err.response?.data?.message || '获取AI总结失败'
+  } finally {
+    aiLoading.value = false
   }
 }
 
@@ -157,14 +180,7 @@ const downloadResource = (resource: Resource) => {
 </script>
 
 <template>
-  <div class="course-resources">
-    <!-- 左侧菜单栏 -->
-    <StudentSidebar activeMenu="courses" @logout="logout" />
-    
-    <div class="main-content">
-    
-      
-      <div class="content">
+  <div class="course-resources-page">
         <!-- 课程信息卡片 -->
         <div class="course-info-card">
           <div class="course-info-item">
@@ -199,6 +215,14 @@ const downloadResource = (resource: Resource) => {
                 <h4>{{ module.title }}</h4>
                 <div class="module-header-actions">
                   <span class="module-order">第 {{ module.displayOrder }} 节</span>
+                  <button 
+                    class="ai-summary-btn"
+                    @click="fetchAISummary(course?.id || '', module.id)"
+                    :disabled="aiLoading"
+                  >
+                    <span v-if="aiLoading && selectedModuleId === module.id">加载中...</span>
+                    <span v-else>AI总结</span>
+                  </button>
                 </div>
               </div>
               <div class="module-content">
@@ -208,9 +232,42 @@ const downloadResource = (resource: Resource) => {
                   </span>
                 </div>
                 
+                <!-- AI总结结果显示 -->
+                <div v-if="aiSummary && selectedModuleId === module.id" class="ai-summary-section">
+                  <div class="ai-summary-header">
+                    <h5>章节知识点总结</h5>
+                    <button class="ai-summary-close-btn" @click="aiSummary = null">
+                      ×
+                    </button>
+                  </div>
+                  <div class="ai-summary-content">
+                    <p>{{ aiSummary.data.answer }}</p>
+                  </div>
+                  
+                  <!-- 学习建议 -->
+                  <div v-if="aiSummary.data.suggestions && aiSummary.data.suggestions.length > 0" class="ai-suggestions">
+                    <h6>学习建议</h6>
+                    <ul>
+                      <li v-for="(suggestion, index) in aiSummary.data.suggestions" :key="index">
+                        {{ suggestion }}
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- 参考资料 -->
+                  <div v-if="aiSummary.data.references && aiSummary.data.references.length > 0" class="ai-references">
+                    <h6>参考资料</h6>
+                    <ul>
+                      <li v-for="(reference, index) in aiSummary.data.references" :key="index">
+                        <a :href="reference.url" target="_blank">{{ reference.title }}</a>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                
                 <!-- 资源列表 -->
                 <div class="resources-list">
-                  
+                   
                   <div v-if="module.resources.length === 0" class="no-resources">暂无资源</div>
                   <div v-else>
                     <div 
@@ -219,11 +276,11 @@ const downloadResource = (resource: Resource) => {
                       class="resource-item"
                     >
                       <div class="resource-icon">
-                        <span v-if="resource.type === 'VIDEO'">&#127916;</span>
-                        <span v-else-if="resource.type === 'PDF'">&#128490;</span>
-                        <span v-else-if="resource.type === 'LINK'">&#128279;</span>
-                        <span v-else-if="resource.type === 'OTHER'">&#128206;</span>
-                        <span v-else>\&#128206;</span>
+                        <span v-if="resource.type === 'VIDEO'">🎬</span>
+                        <span v-else-if="resource.type === 'PDF'">📄</span>
+                        <span v-else-if="resource.type === 'LINK'">🔗</span>
+                        <span v-else-if="resource.type === 'OTHER'">📁</span>
+                        <span v-else>📁</span>
                       </div>
                       <div class="resource-info">
                         <div class="resource-name">{{ resource.name }}</div>
@@ -255,37 +312,12 @@ const downloadResource = (resource: Resource) => {
             </div>
           </div>
         </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <style scoped>
-.course-resources {
-  width: 113%;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  display: flex;
-  overflow: hidden;
-}
-
-/* 右侧主内容 */
-.main-content {
-  flex: 1;
-  margin-left: 210px; /* 与侧边栏宽度一致 */
-  display: flex;
-  flex-direction: column;
-  width: calc(100vw - 280px);
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
-.content {
-  padding: 30px;
-   max-width: 80%; /* 取消最大宽度限制，让内容占满主区域 */
-  margin: 0; /* 去掉自动居中的外边距 */
-  width: 80%;
-  box-sizing: border-box;
+.course-resources-page {
+  padding: var(--space-6);
 }
 
 /* 课程信息卡片 */
@@ -376,11 +408,34 @@ const downloadResource = (resource: Resource) => {
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 500;
+  margin-right: 10px;
 }
 
 .module-header-actions {
   display: flex;
   align-items: center;
+}
+
+/* AI总结按钮样式 */
+.ai-summary-btn {
+  padding: 8px 15px;
+  background-color: #f093fb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.ai-summary-btn:hover:not(:disabled) {
+  background-color: #f5576c;
+}
+
+.ai-summary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .module-content {
@@ -395,6 +450,91 @@ const downloadResource = (resource: Resource) => {
 .release-date {
   color: #666;
   font-size: 0.9rem;
+}
+
+/* AI总结结果样式 */
+.ai-summary-section {
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.ai-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.ai-summary-section h5 {
+  font-size: 1.1rem;
+  margin: 0;
+  color: #0369a1;
+  font-weight: 600;
+}
+
+.ai-summary-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.ai-summary-close-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+.ai-summary-content {
+  background-color: white;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  color: #333;
+  line-height: 1.6;
+}
+
+.ai-suggestions, .ai-references {
+  margin-top: 15px;
+}
+
+.ai-suggestions h6, .ai-references h6 {
+  font-size: 0.95rem;
+  margin: 0 0 10px 0;
+  color: #075985;
+  font-weight: 600;
+}
+
+.ai-suggestions ul, .ai-references ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ai-suggestions li, .ai-references li {
+  margin-bottom: 8px;
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.ai-references a {
+  color: #0284c7;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.ai-references a:hover {
+  color: #0369a1;
+  text-decoration: underline;
 }
 
 /* 资源列表 */
@@ -512,6 +652,17 @@ const downloadResource = (resource: Resource) => {
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
+  }
+  
+  .module-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .module-header-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>
